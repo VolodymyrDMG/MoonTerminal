@@ -349,6 +349,7 @@ impl SettingsView {
                     false,
                     cx,
                 ),
+                self.move_whole_grid_checkbox(&hotkeys, cx),
                 self.mouse_row(
                     t!("hotkeys.mouse.buy_move").to_string(),
                     t!("hotkeys.mouse.buy_move_hint").to_string(),
@@ -589,6 +590,36 @@ impl SettingsView {
                 .items(items),
         )
         .into_any_element()
+    }
+
+    /// Builds the checkbox selecting between whole-grid and nearest-leg Move behaviour.
+    ///
+    /// Mirrors Moonbot's move-all mode: on, a Move gesture shifts every matching leg by one
+    /// anchored delta; off, only the leg nearest to the click moves.
+    fn move_whole_grid_checkbox(&self, hotkeys: &HotkeysConfig, cx: &Context<Self>) -> AnyElement {
+        let backend = self.backend.clone();
+
+        h_flex()
+            .w_full()
+            .min_h(design::fit_h_px(cx, 30.0, 12.0, 6.0))
+            .items_center()
+            .child(
+                MoonCheckbox::new("move-whole-grid")
+                    .checked(hotkeys.move_whole_grid)
+                    .size(MoonCheckboxSize::Compact)
+                    .label(t!("hotkeys.mouse.move_whole_grid").to_string())
+                    .on_change(move |value, _window, cx| {
+                        backend.update(cx, |b, bcx| {
+                            if let Some(p) = b.preview.as_mut() {
+                                if p.hotkeys.move_whole_grid != *value {
+                                    p.hotkeys.move_whole_grid = *value;
+                                    bcx.notify();
+                                }
+                            }
+                        });
+                    }),
+            )
+            .into_any_element()
     }
 
     fn same_move_checkbox(&self, hotkeys: &HotkeysConfig, cx: &Context<Self>) -> AnyElement {

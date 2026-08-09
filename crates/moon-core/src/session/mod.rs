@@ -12,6 +12,7 @@
 //! providers according to the active mode, and assigns market roles with the `SetMarket` command.
 
 pub mod coordinator;
+pub mod move_gesture;
 pub mod order_lines;
 pub mod store;
 
