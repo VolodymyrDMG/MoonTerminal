@@ -232,9 +232,9 @@ hotkeys.group.mouse:
   en: "Order book mouse"
   es: "Ratón en libro"
 hotkeys.group.mouse_hint:
-  ru: "Живой Moonbot-путь из ChartFrameUnit: постановка ордеров кликами в зоне стакана. Перенос линий сейчас — перетаскивание ЛКМ за линию; Move-жесты ниже пока не применяются."
-  en: "Live Moonbot ChartFrameUnit path: place orders by clicking inside the book area. Moving lines is currently plain LMB drag on the line; the Move gestures below are not applied yet."
-  es: "Ruta viva de Moonbot ChartFrameUnit: crear órdenes con clics en el libro. Mover líneas es por ahora arrastre con botón izquierdo; los gestos Move de abajo aún no se aplican."
+  ru: "Живой Moonbot-путь из ChartFrameUnit: постановка ордеров кликами в зоне стакана. Move-жесты переносят ордера на цену клика; перетаскивание линии ЛКМ тоже работает."
+  en: "Live Moonbot ChartFrameUnit path: place orders by clicking inside the book area. Move gestures reprice orders at the click; plain LMB line dragging works too."
+  es: "Ruta viva de Moonbot ChartFrameUnit: crear órdenes con clics en el libro. Los gestos Move llevan las órdenes al precio del clic; el arrastre con botón izquierdo también funciona."
 hotkeys.mouse.buy_set:
   ru: "Поставить Long"
   en: "Place Long"
@@ -267,6 +267,10 @@ hotkeys.mouse.pending_short_hint:
   ru: "MultiOrders.PendingShortSetClick. Moonbot-дефолт: None_Click."
   en: "MultiOrders.PendingShortSetClick. Moonbot default: None_Click."
   es: "MultiOrders.PendingShortSetClick. Valor por defecto: None_Click."
+hotkeys.mouse.move_whole_grid:
+  ru: "Move переносит всю сетку ордеров (иначе — ближайший к клику ордер)"
+  en: "Move shifts the whole order grid (otherwise the order nearest to the click)"
+  es: "Move desplaza toda la rejilla de órdenes (si no, la orden más cercana al clic)"
 hotkeys.mouse.buy_move:
   ru: "Move Open Long"
   en: "Move Open Long"
