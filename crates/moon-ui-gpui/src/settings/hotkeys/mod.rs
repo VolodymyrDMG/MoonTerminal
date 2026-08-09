@@ -111,10 +111,12 @@ enum MouseSlot {
 
 /// Returns whether runtime does not yet consume this mouse gesture.
 ///
-/// Placement reads BuySet/ShortSet in `ChartPanel::try_place_order_click`, and the eight Move
-/// gestures are read by `ChartPanel::try_start_order_drag`. Only the two pending slots remain
-/// unconsumed, and not for want of wiring: moonproto's `NewOrderParams` carries no pending
-/// condition, so there is no command to send (see `moonbot_import` and the order-line notes).
+/// Placement reads BuySet/ShortSet in `ChartPanel::try_place_order_click`; the eight Move
+/// gestures are consumed twice on purpose — `ChartPanel::try_start_order_drag` starts a line
+/// drag, and a plain Move CLICK repriced through `ChartPanel::try_move_orders_click` (the fork's
+/// click-to-reprice path). Only the two pending slots remain unconsumed, and not for want of
+/// wiring: moonproto's `NewOrderParams` carries no pending condition, so there is no command to
+/// send (see `moonbot_import` and the order-line notes).
 fn mouse_slot_wip(slot: MouseSlot) -> bool {
     matches!(slot, MouseSlot::PendingLong | MouseSlot::PendingShort)
 }

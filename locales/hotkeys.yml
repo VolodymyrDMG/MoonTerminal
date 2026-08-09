@@ -248,9 +248,9 @@ hotkeys.group.mouse:
   en: "Order book mouse"
   es: "Ratón en libro"
 hotkeys.group.mouse_hint:
-  ru: "Живой Moonbot-путь из ChartFrameUnit: постановка ордеров кликами в зоне стакана. Move-жесты тянут линию своей стороны (вход/выход, long/short) и добавляются к обычному перетаскиванию ЛКМ за линию, которое работает всегда. Средняя и правая кнопки и дабл-клики доступны только через жесты."
-  en: "Live Moonbot ChartFrameUnit path: place orders by clicking inside the book area. Move gestures drag the line of their own side (entry/exit, long/short) and are added on top of the plain left-button drag, which always works. The middle and right buttons and double clicks are available through gestures only."
-  es: "Ruta viva de Moonbot ChartFrameUnit: crear órdenes con clics en el libro. Los gestos Move arrastran la línea de su lado (entrada/salida, long/short) y se suman al arrastre normal con el botón izquierdo, que siempre funciona. Los botones central y derecho y los dobles clics solo están disponibles mediante gestos."
+  ru: "Живой Moonbot-путь из ChartFrameUnit: постановка ордеров кликами в зоне стакана. Move-жест на линии тянет её как перетаскивание, а Move-клик по пустому месту переносит ордер на цену клика. Обычное перетаскивание ЛКМ за линию работает всегда; средняя и правая кнопки и дабл-клики доступны только через жесты."
+  en: "Live Moonbot ChartFrameUnit path: place orders by clicking inside the book area. A Move gesture on a line drags it; a Move click on empty space reprices the order at the click. Plain LMB line dragging always works; the middle and right buttons and double clicks are available through gestures only."
+  es: "Ruta viva de Moonbot ChartFrameUnit: crear órdenes con clics en el libro. Un gesto Move sobre una línea la arrastra; un clic Move en el vacío lleva la orden al precio del clic. El arrastre con botón izquierdo siempre funciona; los botones central y derecho y los dobles clics solo mediante gestos."
 hotkeys.mouse.buy_set:
   ru: "Поставить Long"
   en: "Place Long"
@@ -283,6 +283,10 @@ hotkeys.mouse.pending_short_hint:
   ru: "MultiOrders.PendingShortSetClick. Moonbot-дефолт: None_Click. Отложенных ордеров нет в moonproto — слать нечего, жест сохраняется на будущее."
   en: "MultiOrders.PendingShortSetClick. Moonbot default: None_Click. moonproto has no pending order, so there is nothing to send; the gesture is stored for later."
   es: "MultiOrders.PendingShortSetClick. Valor por defecto: None_Click. moonproto no tiene órdenes pendientes, así que no hay nada que enviar; el gesto se guarda para más adelante."
+hotkeys.mouse.move_whole_grid:
+  ru: "Move переносит всю сетку ордеров (иначе — ближайший к клику ордер)"
+  en: "Move shifts the whole order grid (otherwise the order nearest to the click)"
+  es: "Move desplaza toda la rejilla de órdenes (si no, la orden más cercana al clic)"
 hotkeys.mouse.buy_move:
   ru: "Move Open Long"
   en: "Move Open Long"

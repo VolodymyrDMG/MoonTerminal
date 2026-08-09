@@ -297,6 +297,10 @@ pub struct HotkeysConfig {
     pub short_buy_move_click2: MouseGestureBinding,
     #[serde(default)]
     pub short_sell_move_click2: MouseGestureBinding,
+    /// Moonbot move-all mode: a Move gesture shifts the whole grid of matching legs by one
+    /// delta, preserving spacing. Off moves only the leg nearest to the click.
+    #[serde(default = "default_move_whole_grid")]
+    pub move_whole_grid: bool,
 }
 
 impl Default for HotkeysConfig {
@@ -344,6 +348,7 @@ impl Default for HotkeysConfig {
             short_sell_move_click: default_left_ctrl(),
             short_buy_move_click2: MouseGestureBinding::None,
             short_sell_move_click2: MouseGestureBinding::None,
+            move_whole_grid: default_move_whole_grid(),
         }
     }
 }
@@ -674,5 +679,10 @@ fn default_left_ctrl() -> MouseGestureBinding {
 }
 
 fn default_same_hotkeys_for_move() -> bool {
+    true
+}
+
+/// Grid moving is the default: it matches the Moonbot move-all mode this port targets first.
+fn default_move_whole_grid() -> bool {
     true
 }

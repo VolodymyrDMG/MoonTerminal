@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use moon_core::config::MouseGestureBinding;
 use moon_core::feed::OrderLinePriceKind;
 use moon_core::session::CoreId;
+use moon_core::session::move_gesture::{MoveCandidate, select_moves};
 use moon_core::session::order_lines::LineKind;
 
 use super::ChartPanel;
@@ -148,6 +149,13 @@ impl ChartPanel {
         pos: (f32, f32),
         cx: &mut Context<Self>,
     ) -> bool {
+        // Move gestures run before placement: a click bound to a Move slot must reprice existing
+        // orders and never fall through to creating a new order or starting a line drag.
+        // (The old post-close ORDER_SUPPRESS_MS guard that used to sit here was removed upstream
+        // together with its field; the Move pre-check is independent of it.)
+        if self.try_move_orders_click(button, modifiers, click_count, pos, cx) {
+            return true;
+        }
         // Resolve Long/Short from the configured buy-set and short-set gestures; unrelated gestures
         // are not order placement.
         let short = {
@@ -274,6 +282,154 @@ impl ChartPanel {
             self.arm_ttl_timer(cx);
         }
         placed
+    }
+
+    /// Reprice existing order legs from a configured Move gesture click in the trading area.
+    ///
+    /// This is the runtime consumer of the Moonbot MultiOrders Move settings: the click price is
+    /// the destination, and `move_whole_grid` selects between shifting every matching leg by one
+    /// anchored delta and moving only the leg nearest to the click (`move_gesture::select_moves`).
+    /// Slots are probed sell-first because Moonbot gives sell orders priority when one click is
+    /// bound to both Move legs; long slots come before short ones for determinism. The primary
+    /// and secondary ("#2") gestures of a slot are equivalent.
+    ///
+    /// Returns `true` — consuming the click — whenever any Move gesture matched, even with
+    /// nothing to move: a Move click must never fall through to placement, cancel, or dragging.
+    fn try_move_orders_click(
+        &mut self,
+        button: TradeMouseButton,
+        modifiers: Modifiers,
+        click_count: usize,
+        pos: (f32, f32),
+        cx: &mut Context<Self>,
+    ) -> bool {
+        // Copy the bindings out so the backend read ends before pane resolution and the update.
+        let (slots, whole_grid) = {
+            let b = self.backend.read(cx);
+            let cfg = b.preview.as_ref().unwrap_or(&b.config);
+            let h = &cfg.hotkeys;
+            (
+                [
+                    (true, false, h.sell_move_click, h.sell_move_click2),
+                    (
+                        true,
+                        true,
+                        h.short_sell_move_click,
+                        h.short_sell_move_click2,
+                    ),
+                    (false, false, h.buy_move_click, h.buy_move_click2),
+                    (false, true, h.short_buy_move_click, h.short_buy_move_click2),
+                ],
+                h.move_whole_grid,
+            )
+        };
+        let matched: Vec<(bool, bool)> = slots
+            .iter()
+            .filter(|(_, _, primary, secondary)| {
+                Self::gesture_matches(*primary, button, modifiers, click_count)
+                    || Self::gesture_matches(*secondary, button, modifiers, click_count)
+            })
+            .map(|(sell, short, _, _)| (*sell, *short))
+            .collect();
+        if matched.is_empty() {
+            return false;
+        }
+        // Resolve pane, price, and (core, market) as placement does: in separate-zone mode only
+        // clicks inside the order-book zone trade; otherwise any pane area does.
+        let pane = if self.separate_zones(cx) {
+            self.glass_pane_at(pos)
+        } else {
+            self.input.pane_at(pos.0, pos.1)
+        };
+        let Some(pane) = pane else {
+            return false;
+        };
+        let Some(click_price) = self.price_at_pane_y(pane, pos.1) else {
+            return false;
+        };
+        let Some((core, market)) = self
+            .chart
+            .with_container(|container| container.target(pane))
+        else {
+            return false;
+        };
+
+        let workspace_group = self.workspace_group.clone();
+        self.backend.update(cx, |b, _| {
+            if !b.workspace_action_allows_core(workspace_group.as_deref(), core) {
+                return;
+            }
+            for (sell, short) in matched {
+                let kind = if sell { LineKind::Sell } else { LineKind::Buy };
+                let mut candidates: Vec<MoveCandidate> = Vec::new();
+                if let Some(core_data) = b.session.store().core(core) {
+                    for order in core_data
+                        .order_lines
+                        .iter_market(&market)
+                        .filter(|order| order.closed_ms.is_none())
+                    {
+                        if order.is_short != short {
+                            continue;
+                        }
+                        // A filled entry is historical and cannot be replaced; this matches
+                        // dragging and the shift-order hotkeys.
+                        if !sell && order.fill_pct > 0.0 {
+                            continue;
+                        }
+                        if let Some(price) = order.lines[kind as usize]
+                            .current_price()
+                            .filter(|price| price.is_finite() && *price > 0.0)
+                        {
+                            candidates.push(MoveCandidate {
+                                uid: order.uid,
+                                price: f64::from(price),
+                            });
+                        }
+                    }
+                }
+                let moves = select_moves(&candidates, click_price, whole_grid);
+                if moves.is_empty() {
+                    continue;
+                }
+                for command in moves {
+                    // Before moving a Sell leg under panic sell, clear the per-order panic flag,
+                    // or the core's panic worker holds the price and moves the line back. This
+                    // matches the drag path in `finish_order_drag`.
+                    if sell
+                        && b.session
+                            .store()
+                            .core(core)
+                            .is_some_and(|d| d.order_lines.order_panic_sell(command.uid))
+                    {
+                        if let Err(error) = b.session.turn_order_panic_sell(core, command.uid, false)
+                        {
+                            log::warn!(
+                                "move gesture: turn panic sell off failed, core={} uid={}: {error:#}",
+                                moon_core::feed::core_label(core),
+                                command.uid,
+                            );
+                        }
+                    }
+                    match b.session.move_order(core, command.uid, command.new_price) {
+                        Ok(()) => log::info!(
+                            "move gesture: core={} market={market} uid={} price={:.8}",
+                            moon_core::feed::core_label(core),
+                            command.uid,
+                            command.new_price,
+                        ),
+                        Err(error) => log::warn!(
+                            "move gesture failed: core={} market={market} uid={} price={:.8}: {error:#}",
+                            moon_core::feed::core_label(core),
+                            command.uid,
+                            command.new_price,
+                        ),
+                    }
+                }
+                return;
+            }
+            log::debug!("move gesture matched with no movable orders: market={market}");
+        });
+        true
     }
 
     /// Hit-test interactive order lines under the cursor.
