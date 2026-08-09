@@ -110,10 +110,10 @@ enum MouseSlot {
 
 /// Returns whether runtime does not yet consume this mouse gesture.
 ///
-/// Order placement checks only BuySet/ShortSet in `ChartPanel::try_place_order_click`; line
-/// movement uses direct left-button dragging and does not inspect the Move gestures.
+/// `ChartPanel::try_place_order_click` consumes BuySet/ShortSet for placement and every Move
+/// slot for repricing existing legs; only the pending-order gestures still lack a consumer.
 fn mouse_slot_wip(slot: MouseSlot) -> bool {
-    !matches!(slot, MouseSlot::BuySet | MouseSlot::ShortSet)
+    matches!(slot, MouseSlot::PendingLong | MouseSlot::PendingShort)
 }
 
 fn parse_hotkey(raw: &str) -> Option<Keystroke> {
