@@ -301,11 +301,18 @@ pub struct MetalLayers {
     markers: Vec<MarkerGpu>,
     volume_buy_max: f32,
     volume_sell_max: f32,
+    /// Moonbot-style volume-graph columns delivered by `set_volume_columns`, drawn live.
+    volume_columns: Vec<ChartCross>,
+    /// Per-side visible maxima of `volume_columns`, the live pass's normalization scale.
+    volume_columns_scale: (f32, f32),
+    volume_columns_dirty: bool,
     bg_uniform: BufferSlot,
     grid_uniform: BufferSlot,
     cursor_uniform: BufferSlot,
     readout_rect_buffer: BufferSlot,
     view_uniform: BufferSlot,
+    volume_view_uniform: BufferSlot,
+    volume_columns_buffer: BufferSlot,
     book_view_uniform: BufferSlot,
     book_style_uniform: BufferSlot,
     cross_buffer: BufferSlot,
@@ -351,11 +358,16 @@ impl MetalLayers {
             markers: Vec::new(),
             volume_buy_max: 1e-6,
             volume_sell_max: 1e-6,
+            volume_columns: Vec::new(),
+            volume_columns_scale: (1e-6, 1e-6),
+            volume_columns_dirty: false,
             bg_uniform: BufferSlot::default(),
             grid_uniform: BufferSlot::default(),
             cursor_uniform: BufferSlot::default(),
             readout_rect_buffer: BufferSlot::default(),
             view_uniform: BufferSlot::default(),
+            volume_view_uniform: BufferSlot::default(),
+            volume_columns_buffer: BufferSlot::default(),
             book_view_uniform: BufferSlot::default(),
             book_style_uniform: BufferSlot::default(),
             cross_buffer: BufferSlot::default(),
@@ -593,6 +605,7 @@ impl MetalLayers {
             self.draw_base_layers(encoder);
             self.draw_cached_combo(device, encoder, view);
         }
+        self.draw_volume_graph_layer(encoder);
         self.draw_price_lines_layer(encoder);
         encoder.set_scissor_rect(bounds_scissor(pane_bounds, gpu.width(), gpu.height()));
         self.draw_user_layers(encoder);
@@ -841,12 +854,8 @@ impl MetalLayers {
         keepalive.push(view_buffer);
         let cross_buffer = (!crosses.is_empty())
             .then(|| snapshot_buffer(device, "moon_chart_combo_crosses", crosses));
-        if !crosses.is_empty() {
-            let cross_buffer = cross_buffer.as_ref().unwrap();
-            set_storage(encoder, 1, cross_buffer.as_ref());
-            crate::diag::bump(&crate::diag::CHART_COMBO_DRAW);
-            draw(encoder, &pipelines.volume, 6, crosses.len() as u64);
-        }
+        // The volume pass left this bake: the Moonbot-style graph draws live in `render`, where
+        // a growing current bucket can reprice without double-blending into the cached texture.
         if !crosses.is_empty() {
             let cross_buffer = cross_buffer.as_ref().unwrap();
             set_storage(encoder, 1, cross_buffer.as_ref());
@@ -857,6 +866,27 @@ impl MetalLayers {
             keepalive.push(cross_buffer);
         }
         keepalive
+    }
+
+    /// Draws the Moonbot-style volume graph as a live layer over the cached chart.
+    ///
+    /// Columns arrive pre-aggregated from `set_volume_columns` and normalize against the
+    /// visible-window maxima carried by `volume_view_uniform`, both written every frame in
+    /// `upload_frame_uniforms`.
+    fn draw_volume_graph_layer(&self, encoder: &RenderCommandEncoderRef) {
+        if self.volume_columns.is_empty() {
+            return;
+        }
+        let pipelines = self.pipelines.as_ref().unwrap();
+        crate::diag::bump(&crate::diag::CHART_COMBO_DRAW);
+        set_uniform(encoder, 0, self.volume_view_uniform.buffer());
+        set_storage(encoder, 1, self.volume_columns_buffer.buffer());
+        draw(
+            encoder,
+            &pipelines.volume,
+            6,
+            self.volume_columns.len() as u64,
+        );
     }
 
     fn draw_price_lines_layer(&self, encoder: &RenderCommandEncoderRef) {
@@ -1166,8 +1196,37 @@ impl MetalLayers {
             .write(device, "moon_chart_readout_rects", readout_rects);
         self.view_uniform
             .write(device, "moon_chart_view_uniform", &[view]);
+        // The volume graph draws with the same live view but its own normalization: the columns
+        // carry quote units and scale to the visible window's maxima, not the ring-wide trade
+        // maxima the legacy bars used.
+        let mut volume_view = view;
+        volume_view.volume_buy_inv = 1.0 / self.volume_columns_scale.0;
+        volume_view.volume_sell_inv = 1.0 / self.volume_columns_scale.1;
+        volume_view.volume_alpha = super::volume_graph::GRAPH_ALPHA;
+        self.volume_view_uniform
+            .write(device, "moon_chart_volume_view_uniform", &[volume_view]);
+        if self.volume_columns_dirty {
+            self.volume_columns_buffer.write(
+                device,
+                "moon_chart_volume_columns",
+                &self.volume_columns,
+            );
+            self.volume_columns_dirty = false;
+        }
         self.book_view_uniform
             .write(device, "moon_chart_book_view_uniform", &[*orderbook_view]);
+    }
+
+    /// Stores the Moonbot-style volume-graph columns and their normalization scale.
+    ///
+    /// The columns replace the legacy per-trade volume bars: the combo bake no longer draws a
+    /// volume pass, and `render` draws these instances live so a growing current bucket never
+    /// double-blends into a cached texture.
+    pub fn set_volume_columns(&mut self, columns: &[ChartCross], buy_max: f32, sell_max: f32) {
+        self.volume_columns.clear();
+        self.volume_columns.extend_from_slice(columns);
+        self.volume_columns_scale = (buy_max.max(1e-6), sell_max.max(1e-6));
+        self.volume_columns_dirty = true;
     }
 
     fn recalc_volume_scale(&mut self) {

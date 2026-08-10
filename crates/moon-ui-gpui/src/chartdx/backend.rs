@@ -131,6 +131,20 @@ impl PlatformLayers {
         }
     }
 
+    /// Replaces the Moonbot-style volume-graph columns and their per-side visible maxima.
+    ///
+    /// Metal draws the graph as a live layer; the other backends keep the legacy per-trade
+    /// volume bars until their ports land, so the call is a no-op there.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub fn set_volume_columns(&mut self, columns: &[ChartCross], buy_max: f32, sell_max: f32) {
+        #[cfg(target_os = "macos")]
+        self.metal.set_volume_columns(columns, buy_max, sell_max);
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (columns, buy_max, sell_max);
+        }
+    }
+
     /// Fully replaces the layer's candle set when the series revision changes.
     pub fn set_candles(&mut self, data: Vec<CandleGpu>) {
         #[cfg(windows)]
