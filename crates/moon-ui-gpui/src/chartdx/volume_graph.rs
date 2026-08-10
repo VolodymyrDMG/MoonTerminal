@@ -191,7 +191,12 @@ pub fn resample_if_stale(
             return None;
         }
     }
-    let t_lo = view_time0 - margin_ms;
+    let step_ms = (COLUMN_STEP_PX / time_to_px).max(0.001);
+    // The grid is anchored to absolute time, not to the view: `t_lo` snaps to a step multiple,
+    // so every rebuild at the same zoom lands trades in the same columns. Anchored to the view
+    // it drifted with the live scroll, and each incoming batch re-gridded the whole graph a
+    // couple of pixels sideways — a permanent shimmer.
+    let t_lo = ((view_time0 - margin_ms) / step_ms).floor() * step_ms;
     let t_hi = view_time0 + window_ms + margin_ms;
     *key = Some(ColumnsKey {
         t_lo,
@@ -200,7 +205,6 @@ pub fn resample_if_stale(
         revision: tape.revision,
     });
 
-    let step_ms = (COLUMN_STEP_PX / time_to_px).max(0.001);
     let count = ((((t_hi - t_lo) / step_ms).ceil() as usize) + 1).min(65_536);
     let mut buys = vec![0.0f32; count];
     let mut sells = vec![0.0f32; count];
@@ -214,9 +218,24 @@ pub fn resample_if_stale(
         }
     }
 
+    // The normalization maxima cover ONLY the visible window, not the resample margins: the
+    // scale labels must state exactly what the tallest column on screen is worth, and a whale
+    // hiding just off-screen in a margin must not shrink everything the trader can see.
+    let vis_lo = (((view_time0 - t_lo) / step_ms).floor() as isize).max(0) as usize;
+    let vis_hi = ((((view_time0 + window_ms) - t_lo) / step_ms)
+        .ceil()
+        .max(0.0) as usize)
+        .min(count);
+    let visible = vis_lo..vis_hi;
+
     let mut columns = Vec::new();
+    let mut buy_max = 0.0f32;
+    let mut sell_max = 0.0f32;
     for (idx, &buy) in buys.iter().enumerate() {
         if buy > 0.0 {
+            if visible.contains(&idx) {
+                buy_max = buy_max.max(buy);
+            }
             columns.push(ChartCross {
                 time_rel: t_lo + step_ms * idx as f32,
                 price: 0.0,
@@ -227,6 +246,9 @@ pub fn resample_if_stale(
     }
     for (idx, &sell) in sells.iter().enumerate() {
         if sell > 0.0 {
+            if visible.contains(&idx) {
+                sell_max = sell_max.max(sell);
+            }
             columns.push(ChartCross {
                 time_rel: t_lo + step_ms * idx as f32,
                 price: 0.0,
@@ -237,30 +259,9 @@ pub fn resample_if_stale(
     }
     Some(ColumnsUpdate {
         columns,
-        buy_max: scale_ceiling(&buys),
-        sell_max: scale_ceiling(&sells),
+        buy_max,
+        sell_max,
     })
-}
-
-/// Returns the normalization ceiling for one side's column sums: the 98th percentile of the
-/// non-zero columns, or the plain maximum while there are too few for a percentile to mean
-/// anything.
-///
-/// A single whale trade otherwise owns a linear scale and flattens the whole flow into pixel
-/// dust. With a percentile ceiling the regular flow uses the band's full height and outliers
-/// saturate at the top — still unmissable, no longer destructive. The scale labels report this
-/// ceiling, so what they say is exactly what a full-height column means.
-fn scale_ceiling(sums: &[f32]) -> f32 {
-    let mut nonzero: Vec<f32> = sums.iter().copied().filter(|v| *v > 0.0).collect();
-    if nonzero.is_empty() {
-        return 0.0;
-    }
-    if nonzero.len() < 5 {
-        return nonzero.iter().fold(0.0f32, |a, &b| a.max(b));
-    }
-    nonzero.sort_unstable_by(f32::total_cmp);
-    let idx = ((nonzero.len() as f32 * 0.98).ceil() as usize).clamp(1, nonzero.len()) - 1;
-    nonzero[idx]
 }
 
 /// Formats a quote-currency amount the way Moonbot labels its volume scale: "174 k$", "1.2 m$".
@@ -276,7 +277,12 @@ pub fn format_quote_short(value: f32) -> String {
             format!("{m:.1} m$")
         }
     } else if value >= 999.5 {
-        format!("{:.0} k$", value / 1_000.0)
+        let k = value / 1_000.0;
+        if k >= 10.0 {
+            format!("{k:.0} k$")
+        } else {
+            format!("{k:.1} k$")
+        }
     } else {
         format!("{value:.0} $")
     }

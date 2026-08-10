@@ -158,28 +158,47 @@ fn quote_labels_match_moonbot_style() {
     assert_eq!(format_quote_short(f32::NAN), "0 $");
 }
 
-/// A single whale no longer owns the scale: the ceiling is the 98th percentile of the non-zero
-/// columns, and the whale's column simply exceeds it (the shader clips it at the band top).
+/// The scale is the honest maximum of the VISIBLE window: an off-screen whale sitting in the
+/// resample margin is still emitted as a column but must not shrink what the trader sees.
 #[test]
-fn whale_saturates_against_percentile_ceiling() {
+fn scale_uses_only_the_visible_window() {
     let mut tape = VolumeTape::default();
-    let mut batch = Vec::new();
-    for i in 0..60 {
-        batch.push(tick(10_000.0 + 5_000.0 * i as f64, 1.0, 10.0, Side::Buy));
-    }
-    batch.push(tick(400_000.0, 1.0, 1_000.0, Side::Buy));
-    tape.ingest(&batch);
+    tape.ingest(&[
+        tick(100_000.0, 1.0, 5.0, Side::Buy),
+        // Inside the covered margin, beyond the visible right edge at 145 000.
+        tick(150_000.0, 1.0, 500.0, Side::Buy),
+    ]);
     let mut key = None;
-    // 0.01 px/ms: trades 5 s apart sit 50 px apart, each in its own column.
-    let update = resample_if_stale(&mut tape, &mut key, 0.0, 0.0, 0.01, 4_000.0)
+    // 0.01 px/ms, 500 px window: visible range [95 000, 145 000], margins reach ~157 500.
+    let update = resample_if_stale(&mut tape, &mut key, 0.0, 95_000.0, 0.01, 500.0)
         .expect("first resample always runs");
-    assert_eq!(
-        update.buy_max, 10.0,
-        "p98 of sixty 10$ columns plus one whale is 10$"
-    );
-    let whale = update.columns.iter().map(|c| c.qty).fold(0.0f32, f32::max);
-    assert_eq!(
-        whale, 1_000.0,
-        "the whale column itself keeps its true value"
-    );
+    assert_eq!(update.buy_max, 5.0, "the label states the visible maximum");
+    let tallest = update.columns.iter().map(|c| c.qty).fold(0.0f32, f32::max);
+    assert_eq!(tallest, 500.0, "the margin column itself is still emitted");
+}
+
+/// The column grid is anchored to absolute time: rebuilds at the same zoom land the same trade
+/// in the same column no matter where the view is — otherwise every live-scroll rebuild
+/// re-gridded the graph a couple of pixels sideways, a permanent shimmer.
+#[test]
+fn column_grid_is_anchored_across_rebuilds() {
+    let mut tape = VolumeTape::default();
+    tape.ingest(&[tick(100_000.0, 1.0, 1.0, Side::Buy)]);
+    let mut key_a = None;
+    let a = resample_if_stale(&mut tape, &mut key_a, 0.0, 50_000.0, 0.01, 1_000.0)
+        .expect("first resample always runs");
+    let mut key_b = None;
+    // A different, non-step-aligned view forces a fresh grid at the same zoom.
+    let b = resample_if_stale(&mut tape, &mut key_b, 0.0, 57_777.0, 0.01, 1_000.0)
+        .expect("first resample always runs");
+    let ta = a.columns.first().expect("trade emitted").time_rel;
+    let tb = b.columns.first().expect("trade emitted").time_rel;
+    assert_eq!(ta, tb, "same zoom, same trade, same column");
+}
+
+/// Sub-10k amounts keep one decimal, as the Moonbot bracket labels do ("5.3 k$").
+#[test]
+fn small_k_labels_keep_a_decimal() {
+    assert_eq!(format_quote_short(5_300.0), "5.3 k$");
+    assert_eq!(format_quote_short(9_940.0), "9.9 k$");
 }
