@@ -1223,9 +1223,12 @@ impl MainChartStack {
             move |event: &MouseUpEvent, _window, app| {
                 // A short right-click in the panel area exits fullscreen. In the control zone
                 // (order book or reserved strip), right-click remains trading-only, while a
-                // right-button price drag remains zoom and does not toggle the stack.
+                // right-button price drag remains zoom and does not toggle the stack. Only an
+                // UNMODIFIED right click toggles, as in Moonbot: Ctrl/Shift/Alt+right belong to
+                // the configurable trading gestures and must not flip the presentation.
                 let panel = panel_for_event.read(app);
-                if panel.window_pos_allows_main_stack_toggle(event.position)
+                if !event.modifiers.modified()
+                    && panel.window_pos_allows_main_stack_toggle(event.position)
                     && !panel.window_pos_in_control_zone(event.position, app)
                     && !panel.rmb_was_moved()
                 {
