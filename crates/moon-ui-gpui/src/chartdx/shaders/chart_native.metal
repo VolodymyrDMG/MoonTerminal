@@ -397,9 +397,13 @@ vertex VolumeOut volume_vertex(uint vid [[vertex_id]], uint iid [[instance_id]],
         return { float4(2.0, 2.0, 0.0, 1.0), 0 };
     }
     float inv = c.side == 0 ? cv.volume_buy_inv : cv.volume_sell_inv;
-    float h = max(1.0, sqrt(saturate(c.qty * inv)) * min(cv.bounds.w * 0.18, 72.0));
+    // The instances are pre-aggregated Moonbot-style graph columns: heights map linearly to the
+    // visible-window maximum (no sqrt compression), the band mirrors volume_graph.rs
+    // (BAND_FRACTION / BAND_MAX_PX), and the width overlaps the 2 px column step into a solid
+    // filled area.
+    float h = max(1.0, saturate(c.qty * inv) * min(cv.bounds.w * 0.22, 260.0));
     float base = cv.bounds.y + cv.bounds.w - 1.0;
-    float bar_w = clamp(cv.time_to_px * 0.35, 1.0, 3.0);
+    float bar_w = 2.75;
     float2 px = float2(round(sx) - bar_w * 0.5, base - h) + CORNERS_01[vid] * float2(bar_w, h);
     return { to_clip(px, cv.resolution), c.side };
 }
