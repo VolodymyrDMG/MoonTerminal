@@ -33,8 +33,10 @@ unknown-git = "deny"
 # Every git dependency this workspace is allowed to have. Two are Moonbot-owned; the rest are
 # pinned upstream forks that GPUI requires. Adding a URL here is the deliberate act of approving a
 # new source of code, and it belongs in the same commit as the dependency itself.
+# FORK-ONLY: the Moon stack source is patched to the VolodymyrDMG fork; restore
+# "https://github.com/Moonbot-Tech/MoonUI" and drop the fork URL together with the [patch] section.
 allow-git = [
-    "https://github.com/Moonbot-Tech/MoonUI",
+    "https://github.com/VolodymyrDMG/MoonUI",
     "https://github.com/Moonbot-Tech/MoonProtoBeta",
     "https://github.com/zed-industries/wgpu",
     "https://github.com/zed-industries/async-process",
