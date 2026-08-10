@@ -287,8 +287,8 @@ struct PaneRender {
     cross_upload: Vec<ChartCross>,
     /// LIQUIDATION trade-cross upload buffer using `side=2` in the same combo ring.
     liq_upload: Vec<ChartCross>,
-    /// Per-bucket buy/sell quote-volume sums feeding the Moonbot-style volume graph.
-    volume_buckets: volume_graph::VolumeBuckets,
+    /// Retained per-tick tape feeding the Moonbot-style volume graph.
+    volume_tape: volume_graph::VolumeTape,
     /// Coverage of the volume columns the backend currently holds; `None` forces a resample.
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     volume_columns_key: Option<volume_graph::ColumnsKey>,
@@ -453,7 +453,7 @@ impl PaneRender {
             source_archive: u64::MAX,
             cross_upload: Vec::new(),
             liq_upload: Vec::new(),
-            volume_buckets: volume_graph::VolumeBuckets::default(),
+            volume_tape: volume_graph::VolumeTape::default(),
             volume_columns_key: None,
             volume_scale: None,
             last_line_upload: Vec::new(),

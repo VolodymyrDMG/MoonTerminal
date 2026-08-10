@@ -670,7 +670,7 @@ impl RenderState {
                     // longer fits the view or the bucket sums changed. The resample is keyed, so
                     // steady panning inside the margin costs nothing here.
                     if let Some(update) = super::volume_graph::resample_if_stale(
-                        &pr.volume_buckets,
+                        &mut pr.volume_tape,
                         &mut pr.volume_columns_key,
                         pr.epoch_ms,
                         view.view_time0,
