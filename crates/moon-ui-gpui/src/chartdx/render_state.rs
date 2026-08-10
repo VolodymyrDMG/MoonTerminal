@@ -666,6 +666,25 @@ impl RenderState {
                     cursor_params.resolution = res;
                     orderbook_view.resolution = res;
                     crate::diag::bump(&crate::diag::CHART_GPU_PREPARE);
+                    // Deliver Moonbot-style volume-graph columns when the cached coverage no
+                    // longer fits the view or the bucket sums changed. The resample is keyed, so
+                    // steady panning inside the margin costs nothing here.
+                    if let Some(update) = super::volume_graph::resample_if_stale(
+                        &pr.volume_buckets,
+                        &mut pr.volume_columns_key,
+                        pr.epoch_ms,
+                        view.view_time0,
+                        view.time_to_px,
+                        view.bounds[2],
+                    ) {
+                        pr.volume_scale = (update.buy_max > 0.0 || update.sell_max > 0.0)
+                            .then_some((update.buy_max, update.sell_max));
+                        pr.layers.set_volume_columns(
+                            &update.columns,
+                            update.buy_max,
+                            update.sell_max,
+                        );
+                    }
                     pr.layers.prepare_metal(
                         &view,
                         &background_params,
