@@ -466,6 +466,10 @@ impl ChartDataState {
                         pr.cross_upload.len() as u64,
                     );
                     pr.layers.reset_combo(std::mem::take(&mut pr.cross_upload));
+                    // The volume graph aggregates the same tick stream: a full combo reset
+                    // supplies the whole visible range, so its buckets restart from it too.
+                    pr.volume_buckets.reset();
+                    pr.volume_buckets.ingest(&pr.history_buffers.ticks);
                     // A full range read covers the requested left edge even when the first
                     // real trade is newer than that edge. Using the first tick as the resident
                     // left boundary makes a fresh live chart reset every frame while the
@@ -489,6 +493,9 @@ impl ChartDataState {
                         pr.cross_upload.len() as u64,
                     );
                     pr.layers.append_combo(&pr.cross_upload);
+                    // Incremental batches carry only the new live edge; the volume-graph buckets
+                    // accumulate them without a rescan.
+                    pr.volume_buckets.ingest(&pr.history_buffers.ticks);
                     pr.gpu_prepare_dirty = true;
                     pixels_changed = true;
                 }
@@ -583,6 +590,8 @@ impl ChartDataState {
             } else if read_history {
                 if pr.resident_left_rel.is_finite() {
                     pr.layers.reset_combo(Vec::new());
+                    pr.volume_buckets.reset();
+                    pr.volume_scale = None;
                     pr.layers.set_price_lines(&[], &[]);
                     pr.layers.set_candles(Vec::new());
                     pr.last_candle_rev = u64::MAX;
