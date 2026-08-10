@@ -149,7 +149,10 @@ fn deny_allow_git() -> Vec<String> {
 /// compile with `mismatched types` rather than run and redden the named assertion below —
 /// exactly the failure mode CONTRIBUTING.md's "the red check names the file" promises against.
 const ALLOWED_GIT_REPOS: &[&str] = &[
-    "https://github.com/Moonbot-Tech/MoonUI",
+    // FORK-ONLY: the Moon stack is patched to this fork until Moonbot-Tech/MoonUI merges the
+    // macOS ctrl+left-click fix; restore "https://github.com/Moonbot-Tech/MoonUI" here and drop
+    // the fork URL together with the [patch] section.
+    "https://github.com/VolodymyrDMG/MoonUI",
     "https://github.com/Moonbot-Tech/MoonProtoBeta",
     "https://github.com/zed-industries/wgpu",
     "https://github.com/zed-industries/async-process",
@@ -215,7 +218,10 @@ fn moonbot_owned_git_crates_still_pin_to_a_git_source() {
             )
         });
         assert!(
-            source.starts_with("git+https://github.com/Moonbot-Tech/"),
+            source.starts_with("git+https://github.com/Moonbot-Tech/")
+                // FORK-ONLY: the Moon stack is temporarily pinned to the ctrl-click fix fork;
+                // drop this arm together with the [patch] section.
+                || source.starts_with("git+https://github.com/VolodymyrDMG/"),
             "`{name}` must stay pinned to a Moonbot-Tech git source, not `{source}` — a lock \
              committed while the sibling override was active carries a local `path` entry instead"
         );
