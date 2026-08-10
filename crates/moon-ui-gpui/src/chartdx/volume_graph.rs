@@ -1,13 +1,14 @@
-//! Moonbot-style time-volume graph: 5-second buy/sell buckets in quote units, resampled into
-//! dense screen-space columns for the existing per-instance volume pass.
+//! Moonbot-style time-volume graph: per-tick buy/sell quote volume accumulated into
+//! screen-space columns for the existing per-instance volume pass.
 //!
-//! The old volume pass drew one hairline bar per trade cross, which reads as noise on liquid
-//! markets. Moonbot instead aggregates trades into fixed time buckets, splits them by side,
-//! smooths the series, and draws it as two overlapping translucent area graphs at the bottom of
-//! the chart with a quote-currency scale. This module owns the platform-free part of that:
-//! incremental bucket sums fed from the same tick batches the combo ring consumes, and a
-//! view-dependent resampler that emits one `ChartCross`-encoded column per couple of pixels so
-//! the unmodified column shader renders a solid filled graph.
+//! The old volume pass drew one hairline bar per trade cross with a square-root scale, which
+//! reads as noise on liquid markets. Moonbot draws the raw tick stream instead: every trade
+//! contributes its quote volume at its own time, with no time-grid aggregation — its "Time, sec"
+//! setting only sizes the hover measure tool. This module owns the platform-free part of that
+//! look: a retained per-pane tick tape fed from the same batches the combo ring consumes, and a
+//! view-dependent accumulator that sums the tape into one column per couple of screen pixels.
+//! Column sums ARE the per-tick structure at the resolution the screen can resolve: zoomed in, a
+//! column is a single trade; zoomed out, it is exactly what those pixels cover.
 //!
 //! Only the aggregation lives here; backends draw the emitted columns as a live layer.
 
@@ -15,19 +16,14 @@
 // intentionally dormant until their ports land, so its items would read as dead there.
 #![cfg_attr(not(target_os = "macos"), allow(dead_code))]
 
-use std::collections::BTreeMap;
-
 use moon_core::feed::{Side, Tick};
 
 use super::types::ChartCross;
 
-/// Aggregation bucket width in absolute milliseconds, matching Moonbot's default "Time, sec: 5".
-pub const BUCKET_MS: f64 = 5_000.0;
-
 /// Horizontal distance between emitted columns in pane pixels.
 ///
 /// The volume shader draws each column 2.75 px wide, so a 2 px step keeps neighbouring columns
-/// overlapping into a solid area at every zoom level.
+/// overlapping into a solid stepped area at every zoom level.
 pub const COLUMN_STEP_PX: f32 = 2.0;
 
 /// Opacity of the volume graph layer, denser than the old per-trade bars to read as an area.
@@ -39,10 +35,11 @@ pub const BAND_FRACTION: f32 = 0.22;
 /// Hard cap of the band height in pixels, mirrored by the volume shader.
 pub const BAND_MAX_PX: f32 = 260.0;
 
-/// Retention horizon in buckets; older sums are pruned on ingest (about 27 hours at 5 s).
-const RETAIN_BUCKETS: i64 = 20_000;
+/// Retained tape length in trades; the oldest are pruned on ingest. Sized above the combo
+/// ring's trade capacity so the graph never runs out before the crosses do.
+const RETAIN_TICKS: usize = 400_000;
 
-/// Extra window fraction resampled on each side so panning inside the margin needs no rebuild.
+/// Extra window fraction accumulated on each side so panning inside the margin needs no rebuild.
 const RESAMPLE_MARGIN: f32 = 0.25;
 
 /// Returns the graph band height in device pixels for a pane of height `pane_h`.
@@ -52,32 +49,42 @@ pub fn band_height_px(pane_h: f32) -> f32 {
     (pane_h * BAND_FRACTION).min(BAND_MAX_PX)
 }
 
-/// Incrementally maintained per-bucket quote-volume sums for one pane's market.
+/// One retained trade of the volume tape: absolute time, quote volume, and side.
+#[derive(Clone, Copy)]
+struct VolTick {
+    time_ms: f64,
+    quote: f32,
+    sell: bool,
+}
+
+/// Retained per-pane tick tape feeding the volume graph.
 ///
-/// Keys are absolute bucket indices (`floor(time_ms / BUCKET_MS)`), so the sums are independent
-/// of the pane's render epoch and survive zooming untouched. Values are `(buy, sell)` sums in
-/// quote units (`qty * price`). `revision` increments on every content change and keys the
-/// resample cache.
+/// The tape keeps absolute times, so it is independent of the pane's render epoch and survives
+/// zooming untouched. `revision` increments on every content change and keys the resample cache.
 #[derive(Default)]
-pub struct VolumeBuckets {
-    sums: BTreeMap<i64, (f32, f32)>,
+pub struct VolumeTape {
+    ticks: Vec<VolTick>,
+    /// True while a batch arrived with out-of-order times; sorted lazily before accumulation.
+    unsorted: bool,
     pub revision: u64,
 }
 
-impl VolumeBuckets {
-    /// Drops all sums, for market switches and full history resets.
+impl VolumeTape {
+    /// Drops the tape, for market switches and full history resets.
     pub fn reset(&mut self) {
-        if !self.sums.is_empty() {
-            self.sums.clear();
+        if !self.ticks.is_empty() {
+            self.ticks.clear();
         }
+        self.unsorted = false;
         self.revision = self.revision.wrapping_add(1);
     }
 
-    /// Adds a tick batch to the bucket sums and prunes buckets beyond the retention horizon.
+    /// Appends a tick batch and prunes the tape beyond `RETAIN_TICKS`.
     ///
-    /// Quantities are in base units, so each trade contributes `qty * price` quote units to its
-    /// side. Non-finite and non-positive contributions are skipped: one corrupt tick must not
-    /// poison a whole bucket.
+    /// Quantities are in base units, so each trade contributes `qty * price` quote units.
+    /// Non-finite and non-positive contributions are skipped: one corrupt tick must not poison
+    /// the graph. Batches normally arrive time-ordered; a stray unordered row only marks the
+    /// tape for a lazy sort instead of forcing one per batch.
     pub fn ingest(&mut self, ticks: &[Tick]) {
         if ticks.is_empty() {
             return;
@@ -88,60 +95,42 @@ impl VolumeBuckets {
             if !quote.is_finite() || quote <= 0.0 || !tick.time_ms.is_finite() {
                 continue;
             }
-            let idx = (tick.time_ms / BUCKET_MS).floor() as i64;
-            let entry = self.sums.entry(idx).or_insert((0.0, 0.0));
-            match tick.side {
-                Side::Buy => entry.0 += quote,
-                Side::Sell => entry.1 += quote,
+            if let Some(last) = self.ticks.last() {
+                if tick.time_ms < last.time_ms {
+                    self.unsorted = true;
+                }
             }
+            self.ticks.push(VolTick {
+                time_ms: tick.time_ms,
+                quote,
+                sell: tick.side == Side::Sell,
+            });
             changed = true;
         }
         if changed {
-            if let Some((&newest, _)) = self.sums.last_key_value() {
-                let cutoff = newest - RETAIN_BUCKETS;
-                // BTreeMap::retain walks everything; splitting off the live tail touches only
-                // the pruned head, which is empty on the hot path.
-                if self
-                    .sums
-                    .first_key_value()
-                    .is_some_and(|(&oldest, _)| oldest < cutoff)
-                {
-                    self.sums = self.sums.split_off(&cutoff);
-                }
+            if self.ticks.len() > RETAIN_TICKS {
+                let drop = self.ticks.len() - RETAIN_TICKS;
+                self.ticks.drain(..drop);
             }
             self.revision = self.revision.wrapping_add(1);
         }
     }
 
-    /// Returns the smoothed per-side value at bucket index `idx` using a 3-tap moving average.
-    fn smoothed(&self, idx: i64) -> (f32, f32) {
-        let mut buy = 0.0;
-        let mut sell = 0.0;
-        for i in idx - 1..=idx + 1 {
-            if let Some(&(b, s)) = self.sums.get(&i) {
-                buy += b;
-                sell += s;
-            }
-        }
-        (buy / 3.0, sell / 3.0)
-    }
-
-    /// Linearly interpolates the smoothed series at absolute time `time_ms`.
-    ///
-    /// Sample points sit at bucket centers, which turns the 5-second staircase into the
-    /// continuous curve Moonbot's "Smooth graph" mode draws.
-    fn sample(&self, time_ms: f64) -> (f32, f32) {
-        let pos = time_ms / BUCKET_MS - 0.5;
-        let left = pos.floor();
-        let frac = (pos - left) as f32;
-        let (b0, s0) = self.smoothed(left as i64);
-        let (b1, s1) = self.smoothed(left as i64 + 1);
-        (b0 + (b1 - b0) * frac, s0 + (s1 - s0) * frac)
-    }
-
-    /// True when no bucket holds any volume.
+    /// True when the tape holds no trades.
     pub fn is_empty(&self) -> bool {
-        self.sums.is_empty()
+        self.ticks.is_empty()
+    }
+
+    /// Sorts the tape if a batch arrived out of order, then returns the slice covering
+    /// `[from_ms, to_ms)` by binary search.
+    fn range(&mut self, from_ms: f64, to_ms: f64) -> &[VolTick] {
+        if self.unsorted {
+            self.ticks.sort_by(|a, b| a.time_ms.total_cmp(&b.time_ms));
+            self.unsorted = false;
+        }
+        let lo = self.ticks.partition_point(|t| t.time_ms < from_ms);
+        let hi = self.ticks.partition_point(|t| t.time_ms < to_ms);
+        &self.ticks[lo..hi]
     }
 }
 
@@ -162,15 +151,17 @@ pub struct ColumnsUpdate {
     pub sell_max: f32,
 }
 
-/// Resamples `buckets` into screen-space columns when the cached `key` no longer covers the
+/// Accumulates the tape into screen-space columns when the cached `key` no longer covers the
 /// view; returns `None` while the cache is still valid.
 ///
 /// Columns cover the visible window plus a `RESAMPLE_MARGIN` fraction on both sides, so panning
 /// inside the margin reuses the uploaded buffer and only zooming, new data, or leaving the
-/// margin rebuilds it. Buy columns are emitted before sell columns: with alpha blending the
-/// draw order is part of the look, and Moonbot draws sell over buy.
+/// margin rebuilds it. Every trade lands in the column its time falls into — raw sums, no
+/// smoothing and no time grid, so the stepped per-tick structure stays intact. Buy columns are
+/// emitted before sell columns: with alpha blending the draw order is part of the look, and
+/// Moonbot draws sell over buy.
 pub fn resample_if_stale(
-    buckets: &VolumeBuckets,
+    tape: &mut VolumeTape,
     key: &mut Option<ColumnsKey>,
     epoch_ms: f64,
     view_time0: f32,
@@ -185,7 +176,7 @@ pub fn resample_if_stale(
     let need_lo = view_time0 - margin_ms * 0.5;
     let need_hi = view_time0 + window_ms + margin_ms * 0.5;
     if let Some(k) = key {
-        if k.revision == buckets.revision
+        if k.revision == tape.revision
             && k.time_to_px == time_to_px
             && k.t_lo <= need_lo
             && k.t_hi >= need_hi
@@ -199,43 +190,46 @@ pub fn resample_if_stale(
         t_lo,
         t_hi,
         time_to_px,
-        revision: buckets.revision,
+        revision: tape.revision,
     });
+
+    let step_ms = (COLUMN_STEP_PX / time_to_px).max(0.001);
+    let count = ((((t_hi - t_lo) / step_ms).ceil() as usize) + 1).min(65_536);
+    let mut buys = vec![0.0f32; count];
+    let mut sells = vec![0.0f32; count];
+    for tick in tape.range(epoch_ms + f64::from(t_lo), epoch_ms + f64::from(t_hi)) {
+        let t_rel = (tick.time_ms - epoch_ms) as f32;
+        let idx = (((t_rel - t_lo) / step_ms) as usize).min(count - 1);
+        if tick.sell {
+            sells[idx] += tick.quote;
+        } else {
+            buys[idx] += tick.quote;
+        }
+    }
 
     let mut columns = Vec::new();
     let mut buy_max = 0.0f32;
     let mut sell_max = 0.0f32;
-    if !buckets.is_empty() {
-        let step_ms = (COLUMN_STEP_PX / time_to_px).max(1.0);
-        let count = (((t_hi - t_lo) / step_ms).ceil() as usize).min(65_536);
-        let mut samples = Vec::with_capacity(count);
-        for i in 0..count {
-            let t_rel = t_lo + step_ms * i as f32;
-            let (buy, sell) = buckets.sample(epoch_ms + f64::from(t_rel));
+    for (idx, &buy) in buys.iter().enumerate() {
+        if buy > 0.0 {
             buy_max = buy_max.max(buy);
+            columns.push(ChartCross {
+                time_rel: t_lo + step_ms * idx as f32,
+                price: 0.0,
+                side: 0,
+                qty: buy,
+            });
+        }
+    }
+    for (idx, &sell) in sells.iter().enumerate() {
+        if sell > 0.0 {
             sell_max = sell_max.max(sell);
-            samples.push((t_rel, buy, sell));
-        }
-        columns.reserve(samples.len() * 2);
-        for &(t_rel, buy, _) in &samples {
-            if buy > 0.0 {
-                columns.push(ChartCross {
-                    time_rel: t_rel,
-                    price: 0.0,
-                    side: 0,
-                    qty: buy,
-                });
-            }
-        }
-        for &(t_rel, _, sell) in &samples {
-            if sell > 0.0 {
-                columns.push(ChartCross {
-                    time_rel: t_rel,
-                    price: 0.0,
-                    side: 1,
-                    qty: sell,
-                });
-            }
+            columns.push(ChartCross {
+                time_rel: t_lo + step_ms * idx as f32,
+                price: 0.0,
+                side: 1,
+                qty: sell,
+            });
         }
     }
     Some(ColumnsUpdate {

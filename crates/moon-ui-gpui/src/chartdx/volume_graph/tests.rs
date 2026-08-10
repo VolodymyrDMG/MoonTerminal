@@ -1,6 +1,6 @@
 use moon_core::feed::{Side, Tick};
 
-use super::{BUCKET_MS, VolumeBuckets, format_quote_short, resample_if_stale};
+use super::{VolumeTape, format_quote_short, resample_if_stale};
 
 fn tick(time_ms: f64, price: f32, qty: f32, side: Side) -> Tick {
     Tick {
@@ -11,71 +11,107 @@ fn tick(time_ms: f64, price: f32, qty: f32, side: Side) -> Tick {
     }
 }
 
-/// Ingests one tick per side into the same bucket and checks the quote-unit split.
+/// Two trades far enough apart land in their own columns with raw per-side quote sums.
 #[test]
-fn ingest_sums_quote_units_per_side() {
-    let mut buckets = VolumeBuckets::default();
-    buckets.ingest(&[
-        tick(1_000_000.0, 2.0, 3.0, Side::Buy),
-        tick(1_000_100.0, 2.0, 5.0, Side::Sell),
+fn trades_accumulate_raw_quote_sums_per_column() {
+    let mut tape = VolumeTape::default();
+    tape.ingest(&[
+        tick(10_000.0, 2.0, 3.0, Side::Buy),
+        tick(10_001.0, 2.0, 1.0, Side::Buy),
+        tick(30_000.0, 2.0, 5.0, Side::Sell),
     ]);
-    // Sample exactly at that bucket's center: the 3-tap average spreads the sums over three
-    // buckets, so the center value is one third of the raw sums.
-    let bucket = (1_000_000.0f64 / BUCKET_MS).floor();
-    let center = (bucket + 0.5) * BUCKET_MS;
     let mut key = None;
-    let update = resample_if_stale(&buckets, &mut key, center - 500.0, 0.0, 1.0, 1_000.0)
+    // 1 px per ms: the two buys (1 ms apart) share a 2 ms column, the sell is far away.
+    let update = resample_if_stale(&mut tape, &mut key, 0.0, 5_000.0, 1.0, 30_000.0)
         .expect("first resample always runs");
-    assert!((update.buy_max - 2.0).abs() < 1e-3, "{}", update.buy_max);
-    assert!(
-        (update.sell_max - 10.0 / 3.0).abs() < 1e-3,
-        "{}",
-        update.sell_max
-    );
+    assert_eq!(update.buy_max, 8.0, "2*3 + 2*1 in one column");
+    assert_eq!(update.sell_max, 10.0);
+    let buys: Vec<_> = update.columns.iter().filter(|c| c.side == 0).collect();
+    let sells: Vec<_> = update.columns.iter().filter(|c| c.side == 1).collect();
+    assert_eq!(buys.len(), 1);
+    assert_eq!(sells.len(), 1);
+    assert_eq!(buys[0].qty, 8.0);
+    assert_eq!(sells[0].qty, 10.0);
+}
+
+/// Zoomed in far enough, every trade is its own column: no time grid glues them together.
+#[test]
+fn zoomed_in_trades_stay_separate() {
+    let mut tape = VolumeTape::default();
+    tape.ingest(&[
+        tick(10_000.0, 1.0, 1.0, Side::Buy),
+        tick(10_050.0, 1.0, 2.0, Side::Buy),
+    ]);
+    let mut key = None;
+    // 1 px per ms: 50 ms apart is 25 columns apart.
+    let update = resample_if_stale(&mut tape, &mut key, 9_000.0, 0.0, 1.0, 2_000.0)
+        .expect("first resample always runs");
+    let buys: Vec<_> = update.columns.iter().filter(|c| c.side == 0).collect();
+    assert_eq!(buys.len(), 2);
+    assert_eq!(update.buy_max, 2.0, "separate trades never sum");
 }
 
 /// Corrupt ticks must not contribute: non-finite or non-positive quote volume is skipped.
 #[test]
 fn ingest_skips_corrupt_ticks() {
-    let mut buckets = VolumeBuckets::default();
-    buckets.ingest(&[
+    let mut tape = VolumeTape::default();
+    tape.ingest(&[
         tick(f64::NAN, 2.0, 3.0, Side::Buy),
         tick(1_000.0, f32::NAN, 3.0, Side::Buy),
         tick(1_000.0, 2.0, 0.0, Side::Buy),
         tick(1_000.0, -1.0, 3.0, Side::Buy),
     ]);
-    assert!(buckets.is_empty());
+    assert!(tape.is_empty());
+}
+
+/// An out-of-order batch still accumulates correctly thanks to the lazy sort.
+#[test]
+fn out_of_order_batches_accumulate_after_lazy_sort() {
+    let mut tape = VolumeTape::default();
+    tape.ingest(&[tick(20_000.0, 1.0, 1.0, Side::Buy)]);
+    tape.ingest(&[tick(10_000.0, 1.0, 2.0, Side::Buy)]);
+    let mut key = None;
+    let update = resample_if_stale(&mut tape, &mut key, 0.0, 5_000.0, 0.1, 3_000.0)
+        .expect("first resample always runs");
+    let total: f32 = update
+        .columns
+        .iter()
+        .filter(|c| c.side == 0)
+        .map(|c| c.qty)
+        .sum();
+    assert_eq!(total, 3.0, "both trades inside the window must count");
 }
 
 /// The resample cache holds while the view stays inside the margin and the data is unchanged.
 #[test]
 fn resample_cache_holds_within_margin_and_invalidates_on_data() {
-    let mut buckets = VolumeBuckets::default();
-    buckets.ingest(&[tick(10_000.0, 1.0, 1.0, Side::Buy)]);
+    let mut tape = VolumeTape::default();
+    tape.ingest(&[tick(10_000.0, 1.0, 1.0, Side::Buy)]);
     let mut key = None;
-    assert!(resample_if_stale(&buckets, &mut key, 0.0, 0.0, 1.0, 1_000.0).is_some());
+    assert!(resample_if_stale(&mut tape, &mut key, 0.0, 0.0, 1.0, 1_000.0).is_some());
     // Same view again: cached.
-    assert!(resample_if_stale(&buckets, &mut key, 0.0, 0.0, 1.0, 1_000.0).is_none());
+    assert!(resample_if_stale(&mut tape, &mut key, 0.0, 0.0, 1.0, 1_000.0).is_none());
     // A small pan inside the margin: still cached.
-    assert!(resample_if_stale(&buckets, &mut key, 0.0, 60.0, 1.0, 1_000.0).is_none());
+    assert!(resample_if_stale(&mut tape, &mut key, 0.0, 60.0, 1.0, 1_000.0).is_none());
     // New data invalidates.
-    buckets.ingest(&[tick(20_000.0, 1.0, 1.0, Side::Sell)]);
-    assert!(resample_if_stale(&buckets, &mut key, 0.0, 60.0, 1.0, 1_000.0).is_some());
+    tape.ingest(&[tick(20_000.0, 1.0, 1.0, Side::Sell)]);
+    assert!(resample_if_stale(&mut tape, &mut key, 0.0, 60.0, 1.0, 1_000.0).is_some());
     // A zoom change invalidates.
-    assert!(resample_if_stale(&buckets, &mut key, 0.0, 60.0, 2.0, 1_000.0).is_some());
+    assert!(resample_if_stale(&mut tape, &mut key, 0.0, 60.0, 2.0, 1_000.0).is_some());
 }
 
-/// Column output: buys precede sells (draw order is part of the look), zero samples are elided,
-/// and every emitted column stays within the per-side maxima the update reports.
+/// Column output keeps buys before sells (draw order is part of the look) and every column
+/// stays within the per-side maxima the update reports.
 #[test]
 fn columns_are_side_ordered_and_bounded_by_maxima() {
-    let mut buckets = VolumeBuckets::default();
-    buckets.ingest(&[
+    let mut tape = VolumeTape::default();
+    tape.ingest(&[
         tick(30_000.0, 1.0, 4.0, Side::Buy),
         tick(35_000.0, 1.0, 2.0, Side::Sell),
+        tick(36_000.0, 1.0, 1.0, Side::Buy),
     ]);
     let mut key = None;
-    let update = resample_if_stale(&buckets, &mut key, 0.0, 20_000.0, 0.01, 300.0)
+    let update = resample_if_stale(&mut tape, &mut key, 0.0, 20_000.0, 0.01, 300.0)
         .expect("first resample always runs");
     assert!(!update.columns.is_empty());
     let first_sell = update
@@ -98,12 +134,12 @@ fn columns_are_side_ordered_and_bounded_by_maxima() {
     }
 }
 
-/// An empty bucket store resamples to an empty column set with zero maxima.
+/// An empty tape resamples to an empty column set with zero maxima.
 #[test]
-fn empty_buckets_resample_to_no_columns() {
-    let buckets = VolumeBuckets::default();
+fn empty_tape_resamples_to_no_columns() {
+    let mut tape = VolumeTape::default();
     let mut key = None;
-    let update = resample_if_stale(&buckets, &mut key, 0.0, 0.0, 1.0, 500.0)
+    let update = resample_if_stale(&mut tape, &mut key, 0.0, 0.0, 1.0, 500.0)
         .expect("first resample always runs");
     assert!(update.columns.is_empty());
     assert_eq!(update.buy_max, 0.0);

@@ -284,14 +284,15 @@ impl RenderState {
             }
 
             // Moonbot-style volume-graph scale: the visible-window maximum and its half hug the
-            // band's top and middle at the plot's left edge, like the reference terminal's
-            // "174 k$ / 87 k$" pair. Present only while the pane holds delivered columns, so
+            // band's top and middle at the plot's RIGHT edge — the reference terminal's
+            // "10.7 k$ / 5.3 k$" bracket with Ind.Pos Right, the mode Moonbot users read the
+            // graph against the book. Present only while the pane holds delivered columns, so
             // platforms without the live graph never label an absent band.
             if let Some((buy_max, sell_max)) = self.panes[idx].volume_scale {
                 let vmax = buy_max.max(sell_max);
                 if vmax > 0.0 {
                     let band_h = crate::chartdx::volume_graph::band_height_px(view.bounds[3]) / sf;
-                    let label_x = plot_left + 6.0;
+                    let label_x = plot_right - 6.0;
                     for (value, y) in [
                         (vmax, plot_bottom - band_h),
                         (vmax * 0.5, plot_bottom - band_h * 0.5),
@@ -304,7 +305,7 @@ impl RenderState {
                             &crate::chartdx::volume_graph::format_quote_short(value),
                             label_x,
                             y,
-                            0.0,
+                            1.0,
                             0.5,
                             label_neutral,
                         )?;
