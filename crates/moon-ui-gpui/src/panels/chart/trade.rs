@@ -276,11 +276,11 @@ impl ChartPanel {
     /// Reprice existing order legs from a configured Move gesture click in the trading area.
     ///
     /// This is the runtime consumer of the Moonbot MultiOrders Move settings: the click price is
-    /// the destination, and `move_whole_grid` selects between shifting every matching leg by one
-    /// anchored delta and moving only the leg nearest to the click (`move_gesture::select_moves`).
-    /// Slots are probed sell-first because Moonbot gives sell orders priority when one click is
-    /// bound to both Move legs; long slots come before short ones for determinism. The primary
-    /// and secondary ("#2") gestures of a slot are equivalent.
+    /// the destination, and `move_whole_grid` selects between shifting the whole grid so its
+    /// market-facing head leg lands on the click and moving only the leg nearest to the click
+    /// (`move_gesture::select_moves`). Slots are probed sell-first because Moonbot gives sell
+    /// orders priority when one click is bound to both Move legs; long slots come before short
+    /// ones for determinism. The primary and secondary ("#2") gestures of a slot are equivalent.
     ///
     /// Returns `true` — consuming the click — whenever any Move gesture matched, even with
     /// nothing to move: a Move click must never fall through to placement, cancel, or dragging.
@@ -376,7 +376,11 @@ impl ChartPanel {
                         }
                     }
                 }
-                let moves = select_moves(&candidates, click_price, whole_grid);
+                // The grid's head is its market-facing leg: entry grids sit below the market for
+                // longs and exit grids below it for shorts, so the head is the maximum price
+                // when `sell == short` and the minimum otherwise (long exits and short entries
+                // sit above the market).
+                let moves = select_moves(&candidates, click_price, whole_grid, sell == short);
                 if moves.is_empty() {
                     continue;
                 }
