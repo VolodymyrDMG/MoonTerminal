@@ -157,3 +157,29 @@ fn quote_labels_match_moonbot_style() {
     assert_eq!(format_quote_short(0.0), "0 $");
     assert_eq!(format_quote_short(f32::NAN), "0 $");
 }
+
+/// A single whale no longer owns the scale: the ceiling is the 98th percentile of the non-zero
+/// columns, and the whale's column simply exceeds it (the shader clips it at the band top).
+#[test]
+fn whale_saturates_against_percentile_ceiling() {
+    let mut tape = VolumeTape::default();
+    let mut batch = Vec::new();
+    for i in 0..60 {
+        batch.push(tick(10_000.0 + 5_000.0 * i as f64, 1.0, 10.0, Side::Buy));
+    }
+    batch.push(tick(400_000.0, 1.0, 1_000.0, Side::Buy));
+    tape.ingest(&batch);
+    let mut key = None;
+    // 0.01 px/ms: trades 5 s apart sit 50 px apart, each in its own column.
+    let update = resample_if_stale(&mut tape, &mut key, 0.0, 0.0, 0.01, 4_000.0)
+        .expect("first resample always runs");
+    assert_eq!(
+        update.buy_max, 10.0,
+        "p98 of sixty 10$ columns plus one whale is 10$"
+    );
+    let whale = update.columns.iter().map(|c| c.qty).fold(0.0f32, f32::max);
+    assert_eq!(
+        whale, 1_000.0,
+        "the whale column itself keeps its true value"
+    );
+}

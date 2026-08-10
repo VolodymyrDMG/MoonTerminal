@@ -26,8 +26,15 @@ use super::types::ChartCross;
 /// overlapping into a solid stepped area at every zoom level.
 pub const COLUMN_STEP_PX: f32 = 2.0;
 
-/// Opacity of the volume graph layer, denser than the old per-trade bars to read as an area.
-pub const GRAPH_ALPHA: f32 = 0.55;
+/// Opacity of the volume graph layer; bright enough for isolated per-trade needles on the dark
+/// theme, still translucent where dense flow overlaps.
+pub const GRAPH_ALPHA: f32 = 0.75;
+
+/// Faint plate under the whole graph band, Moonbot's separate Vol-zone look.
+pub const BAND_UNDERLAY_RGBA: [f32; 4] = [1.0, 1.0, 1.0, 0.045];
+
+/// Hairline top edge of the graph band, separating it from the chart above.
+pub const BAND_EDGE_RGBA: [f32; 4] = [1.0, 1.0, 1.0, 0.10];
 
 /// Fraction of the pane height the graph band may occupy, mirrored by the volume shader.
 pub const BAND_FRACTION: f32 = 0.22;
@@ -208,11 +215,8 @@ pub fn resample_if_stale(
     }
 
     let mut columns = Vec::new();
-    let mut buy_max = 0.0f32;
-    let mut sell_max = 0.0f32;
     for (idx, &buy) in buys.iter().enumerate() {
         if buy > 0.0 {
-            buy_max = buy_max.max(buy);
             columns.push(ChartCross {
                 time_rel: t_lo + step_ms * idx as f32,
                 price: 0.0,
@@ -223,7 +227,6 @@ pub fn resample_if_stale(
     }
     for (idx, &sell) in sells.iter().enumerate() {
         if sell > 0.0 {
-            sell_max = sell_max.max(sell);
             columns.push(ChartCross {
                 time_rel: t_lo + step_ms * idx as f32,
                 price: 0.0,
@@ -234,9 +237,30 @@ pub fn resample_if_stale(
     }
     Some(ColumnsUpdate {
         columns,
-        buy_max,
-        sell_max,
+        buy_max: scale_ceiling(&buys),
+        sell_max: scale_ceiling(&sells),
     })
+}
+
+/// Returns the normalization ceiling for one side's column sums: the 98th percentile of the
+/// non-zero columns, or the plain maximum while there are too few for a percentile to mean
+/// anything.
+///
+/// A single whale trade otherwise owns a linear scale and flattens the whole flow into pixel
+/// dust. With a percentile ceiling the regular flow uses the band's full height and outliers
+/// saturate at the top — still unmissable, no longer destructive. The scale labels report this
+/// ceiling, so what they say is exactly what a full-height column means.
+fn scale_ceiling(sums: &[f32]) -> f32 {
+    let mut nonzero: Vec<f32> = sums.iter().copied().filter(|v| *v > 0.0).collect();
+    if nonzero.is_empty() {
+        return 0.0;
+    }
+    if nonzero.len() < 5 {
+        return nonzero.iter().fold(0.0f32, |a, &b| a.max(b));
+    }
+    nonzero.sort_unstable_by(f32::total_cmp);
+    let idx = ((nonzero.len() as f32 * 0.98).ceil() as usize).clamp(1, nonzero.len()) - 1;
+    nonzero[idx]
 }
 
 /// Formats a quote-currency amount the way Moonbot labels its volume scale: "174 k$", "1.2 m$".
