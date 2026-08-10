@@ -398,13 +398,14 @@ vertex VolumeOut volume_vertex(uint vid [[vertex_id]], uint iid [[instance_id]],
     }
     float inv = c.side == 0 ? cv.volume_buy_inv : cv.volume_sell_inv;
     // The instances are pre-aggregated Moonbot-style graph columns: heights map linearly to the
-    // 98th-percentile ceiling (whales saturate at the band top instead of flattening the flow),
-    // and the band mirrors volume_graph.rs (BAND_FRACTION / BAND_MAX_PX). Width follows zoom —
-    // about 400 ms of screen space, clamped so isolated trades read as solid blocks at high zoom
-    // while dense flow still merges into an area over the 2 px column step.
+    // visible-window maximum — the tallest visible column touches the band top and every other
+    // height is its true fraction of that, nothing clipped, nothing compressed. The band mirrors
+    // volume_graph.rs (BAND_FRACTION / BAND_MAX_PX). Width stays one column step (plus a hair
+    // against round() gaps): a trade occupies exactly its own time slot, so the graph never
+    // smears single trades into wide blocks the tape does not contain.
     float h = max(1.0, saturate(c.qty * inv) * min(cv.bounds.w * 0.22, 260.0));
     float base = cv.bounds.y + cv.bounds.w - 1.0;
-    float bar_w = clamp(cv.time_to_px * 400.0, 4.0, 12.0);
+    float bar_w = 2.5;
     float2 px = float2(round(sx) - bar_w * 0.5, base - h) + CORNERS_01[vid] * float2(bar_w, h);
     return { to_clip(px, cv.resolution), c.side };
 }
