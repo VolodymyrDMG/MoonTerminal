@@ -43,6 +43,7 @@ pub mod pane;
 #[cfg(windows)]
 pub mod readout;
 mod render_state;
+mod volume_graph;
 pub(crate) use render_state::arrival_flash_enabled;
 mod text;
 pub mod types;
@@ -295,6 +296,13 @@ struct PaneRender {
     cross_upload: Vec<ChartCross>,
     /// LIQUIDATION trade-cross upload buffer using `side=2` in the same combo ring.
     liq_upload: Vec<ChartCross>,
+    /// Per-bucket buy/sell quote-volume sums feeding the Moonbot-style volume graph.
+    volume_buckets: volume_graph::VolumeBuckets,
+    /// Coverage of the volume columns the backend currently holds; `None` forces a resample.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    volume_columns_key: Option<volume_graph::ColumnsKey>,
+    /// Per-side visible maxima of the delivered volume columns, for the graph's scale labels.
+    volume_scale: Option<(f32, f32)>,
     last_line_upload: Vec<PriceLinePoint>,
     mark_line_upload: Vec<PriceLinePoint>,
     /// Reusable candle-layer upload buffer.
@@ -463,6 +471,9 @@ impl PaneRender {
             source_archive: u64::MAX,
             cross_upload: Vec::new(),
             liq_upload: Vec::new(),
+            volume_buckets: volume_graph::VolumeBuckets::default(),
+            volume_columns_key: None,
+            volume_scale: None,
             last_line_upload: Vec::new(),
             mark_line_upload: Vec::new(),
             candle_upload: Vec::new(),
