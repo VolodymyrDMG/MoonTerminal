@@ -43,3 +43,12 @@ opt-level = 2
 [patch.crates-io]
 async-process = { git = "https://github.com/zed-industries/async-process.git", rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d" }
 async-task = { git = "https://github.com/smol-rs/async-task.git", rev = "b4486cd71e4e94fbda54ce6302444de14f4d190e" }
+
+# FORK-ONLY (VolodymyrDMG): take the Moon stack from the fork carrying the macOS
+# ctrl+left-click fix (moon-gpui-macos stops remapping it to a right click) until
+# Moonbot-Tech/MoonUI merges that change. Drop this whole section with that merge;
+# it must not be part of an upstream MoonTerminal pull request.
+[patch."https://github.com/Moonbot-Tech/MoonUI"]
+moon-gpui = { git = "https://github.com/VolodymyrDMG/MoonUI", branch = "fix/macos-ctrl-left-click" }
+moon-gpui-platform = { git = "https://github.com/VolodymyrDMG/MoonUI", branch = "fix/macos-ctrl-left-click" }
+moon-ui = { git = "https://github.com/VolodymyrDMG/MoonUI", branch = "fix/macos-ctrl-left-click" }
