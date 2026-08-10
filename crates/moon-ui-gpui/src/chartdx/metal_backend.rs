@@ -313,6 +313,7 @@ pub struct MetalLayers {
     view_uniform: BufferSlot,
     volume_view_uniform: BufferSlot,
     volume_columns_buffer: BufferSlot,
+    volume_band_buffer: BufferSlot,
     book_view_uniform: BufferSlot,
     book_style_uniform: BufferSlot,
     cross_buffer: BufferSlot,
@@ -368,6 +369,7 @@ impl MetalLayers {
             view_uniform: BufferSlot::default(),
             volume_view_uniform: BufferSlot::default(),
             volume_columns_buffer: BufferSlot::default(),
+            volume_band_buffer: BufferSlot::default(),
             book_view_uniform: BufferSlot::default(),
             book_style_uniform: BufferSlot::default(),
             cross_buffer: BufferSlot::default(),
@@ -638,6 +640,13 @@ impl MetalLayers {
             set_storage(encoder, 1, self.zone_buffer.buffer());
             draw(encoder, &pipelines.zone, 6, self.zones.len() as u64);
         }
+
+        // Volume-band underlay (geometry in `upload_common`): after the grid for the same reason
+        // as zones — the grid pass paints the plot background — and below the candles, where a
+        // band belongs.
+        crate::diag::bump(&crate::diag::CHART_BG_DRAW);
+        set_storage(encoder, 1, self.volume_band_buffer.buffer());
+        draw(encoder, &pipelines.readout_rect, 6, 2);
 
         // Candles render beneath trade crosses because combo blits over the base cache.
         if !self.candles.is_empty() {
@@ -1094,6 +1103,28 @@ impl MetalLayers {
             .write(device, "moon_chart_cursor_uniform", &[*cursor_params]);
         self.readout_rect_buffer
             .write(device, "moon_chart_readout_rects", &[] as &[ReadoutRect]);
+        // Volume-band underlay: a faint plate with a hairline top edge under the graph band —
+        // Moonbot's separate Vol-zone look. Baked with the base layers, beneath the candles;
+        // geometry depends only on the pane bounds, and every prepare rewrites it.
+        let band_h = super::volume_graph::band_height_px(view.bounds[3]);
+        let band_y = view.bounds[1] + view.bounds[3] - band_h;
+        let band_m = [0.0, view.resolution[0], view.resolution[1], 0.0];
+        let band_rects = [
+            ReadoutRect {
+                dst: [view.bounds[0], band_y, view.bounds[2], band_h],
+                bg: super::volume_graph::BAND_UNDERLAY_RGBA,
+                border: [0.0; 4],
+                m: band_m,
+            },
+            ReadoutRect {
+                dst: [view.bounds[0], band_y, view.bounds[2], 1.0],
+                bg: super::volume_graph::BAND_EDGE_RGBA,
+                border: [0.0; 4],
+                m: band_m,
+            },
+        ];
+        self.volume_band_buffer
+            .write(device, "moon_chart_volume_band", &band_rects);
         self.view_uniform
             .write(device, "moon_chart_view_uniform", &[view]);
         self.book_view_uniform
