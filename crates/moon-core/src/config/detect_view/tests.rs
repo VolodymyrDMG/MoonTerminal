@@ -14,6 +14,7 @@ fn detect_view_roundtrip_preserves_every_field() {
     cfg.mini.rail_w = 5;
     cfg.mini.rail_grad = 61;
     cfg.medium.chart = DetectChart::None;
+    cfg.large.chart = DetectChart::Ticks;
     for (i, slot) in cfg.large.slots.iter_mut().enumerate() {
         slot.field = DetectField::ALL[i % DetectField::ALL.len()];
         slot.over = i % 2 == 0;

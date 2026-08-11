@@ -26,7 +26,8 @@ fn deep_row_candle(r: &moonproto::DeepPrice) -> crate::market::candles::ChartCan
 use super::{
     drain_price_line, moon_time_from_rel_ms, price_rows_to_points, rows_to_ticks,
     trade_price_range, CandleReadParams, ChartHistoryBuffers, ChartHistoryCursor, ChartHistoryRead,
-    DetectSnapshot, LatestPriceError, MarketDataSource, MarketRevisions, MarketTickerReadout,
+    DetectSnapshot, DetectTick, LatestPriceError, MarketDataSource, MarketRevisions,
+    MarketTickerReadout,
 };
 use crate::market::candles::ChartCandle;
 
@@ -498,6 +499,33 @@ impl MarketDataSource {
                             (c.open, c.high, c.low, c.close),
                         );
                     }
+                }
+                // Freeze the last 30 seconds of the same trade rows for the ticks mini-chart —
+                // the detect-time snapshot of the move's ignition. Capped so one frantic market
+                // cannot bloat a card; the newest trades win.
+                const TICKS_WINDOW_MS: f64 = 30_000.0;
+                const TICKS_CAP: usize = 1_500;
+                let from_ms = now_ms as f64 - TICKS_WINDOW_MS;
+                out.ticks = ticks
+                    .iter()
+                    .filter(|t| {
+                        t.time_ms >= from_ms
+                            && t.time_ms.is_finite()
+                            && t.price.is_finite()
+                            && t.price > 0.0
+                            && t.qty.is_finite()
+                            && t.qty > 0.0
+                    })
+                    .map(|t| DetectTick {
+                        t_rel_ms: (t.time_ms - now_ms as f64) as f32,
+                        price: t.price,
+                        quote: t.qty * t.price,
+                        sell: t.side == crate::feed::Side::Sell,
+                    })
+                    .collect();
+                if out.ticks.len() > TICKS_CAP {
+                    let drop = out.ticks.len() - TICKS_CAP;
+                    out.ticks.drain(..drop);
                 }
             }
         }

@@ -82,6 +82,10 @@ detects.cfg.chart_line:
   ru: "Линия"
   en: "Line"
   es: "Línea"
+detects.cfg.chart_ticks:
+  ru: "Тики 30 сек"
+  en: "Ticks 30 s"
+  es: "Ticks 30 s"
 detects.cfg.rail_frame:
   ru: "Полоса сервера"
   en: "Server rail"
