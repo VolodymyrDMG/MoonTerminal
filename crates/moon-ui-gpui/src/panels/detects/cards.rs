@@ -83,12 +83,11 @@ pub(super) fn card_sized(
     cx: &App,
 ) -> Div {
     let scfg = cfg.size_cfg(size);
-    let dec = cfg.delta_decimals_clamped();
     let color = design::rgb_to_u32(it.color);
     let inner = match size {
-        DETECT_SIZE_MINI => mini_layout(it, secs, scfg, dec, theme, badges, p, is_light, cx),
-        DETECT_SIZE_LARGE => large_layout(it, secs, scfg, dec, theme, badges, p, is_light, cx),
-        _ => medium_layout(it, secs, scfg, dec, theme, badges, p, is_light, cx),
+        DETECT_SIZE_MINI => mini_layout(it, secs, scfg, cfg, theme, badges, p, is_light, cx),
+        DETECT_SIZE_LARGE => large_layout(it, secs, scfg, cfg, theme, badges, p, is_light, cx),
+        _ => medium_layout(it, secs, scfg, cfg, theme, badges, p, is_light, cx),
     };
     base(scfg, color, p, cx).child(inner)
 }
@@ -271,7 +270,7 @@ fn delta_chip(val: f32, over: bool, decimals: usize, p: MoonPalette, cx: &App) -
 ///     it: Detection snapshot supplying field values.
 ///     secs: Rounded detection age in seconds.
 ///     coin_px: Available coin-label width.
-///     decimals: Percentage precision selected for the card.
+///     view: Group view configuration supplying delta precision and the tick window.
 ///     badges: Detection-type badge configuration.
 ///     p: Active Moon palette.
 ///     is_light: Whether the active palette is light.
@@ -286,12 +285,13 @@ fn chip(
     it: &DetectItem,
     secs: u32,
     coin_px: f32,
-    decimals: usize,
+    view: &DetectViewCfg,
     badges: &BadgesConfig,
     p: MoonPalette,
     is_light: bool,
     cx: &App,
 ) -> Option<AnyElement> {
+    let decimals = view.delta_decimals_clamped();
     let el: AnyElement = match field {
         DetectField::None => return None,
         DetectField::Coin => coin_text(it, p, coin_px).render().into_any_element(),
@@ -304,6 +304,16 @@ fn chip(
             .into_any_element(),
         DetectField::Delta24h => delta_chip(it.delta_24h, over, decimals, p, cx).into_any_element(),
         DetectField::Delta1h => delta_chip(it.delta_1h, over, decimals, p, cx).into_any_element(),
+        // Δ over the configured tick window; NaN renders the shared "—" when the window holds
+        // under two trades, keeping the chip's footprint (and delta styling contract) intact.
+        DetectField::DeltaWin => delta_chip(
+            window_delta(&it.ticks, view.ticks_window_ms()).unwrap_or(f32::NAN),
+            over,
+            decimals,
+            p,
+            cx,
+        )
+        .into_any_element(),
         DetectField::Exchange => {
             let exchange = crate::controls::exchange_display_name(&it.exchange_name);
             if exchange.is_empty() {
@@ -321,7 +331,12 @@ fn chip(
         }
     };
     // Give non-delta chart overlays the same design backing used for readable overlay chips.
-    if over && !matches!(field, DetectField::Delta24h | DetectField::Delta1h) {
+    if over
+        && !matches!(
+            field,
+            DetectField::Delta24h | DetectField::Delta1h | DetectField::DeltaWin
+        )
+    {
         return Some(
             div()
                 .px(px(2.0))
@@ -344,7 +359,7 @@ fn cluster<'a>(
     it: &DetectItem,
     secs: u32,
     coin_px: f32,
-    decimals: usize,
+    view: &DetectViewCfg,
     badges: &BadgesConfig,
     p: MoonPalette,
     is_light: bool,
@@ -353,7 +368,7 @@ fn cluster<'a>(
     let chips: Vec<AnyElement> = slots
         .filter_map(|s| {
             chip(
-                s.field, over, it, secs, coin_px, decimals, badges, p, is_light, cx,
+                s.field, over, it, secs, coin_px, view, badges, p, is_light, cx,
             )
         })
         .collect();
@@ -377,37 +392,66 @@ fn cluster<'a>(
 fn chart_el(
     it: &DetectItem,
     scfg: &DetectSizeCfg,
+    win_ms: f32,
     theme: &moon_core::config::ChartTheme,
 ) -> Option<AnyElement> {
     match scfg.chart {
         DetectChart::None => None,
         DetectChart::Candles => candle_canvas(&it.bars, theme),
         DetectChart::Line => line_canvas(&it.line, theme),
-        // Falls back to candles when the provider retained no trade ring for the market, so the
-        // card never goes blank just because the ticks were unavailable.
+        // Falls back to candles when the provider retained no trade ring for the market (or the
+        // chosen window holds under two trades), so the card never goes blank just because the
+        // ticks were unavailable.
         DetectChart::Ticks => {
-            ticks_canvas(&it.ticks, theme).or_else(|| candle_canvas(&it.bars, theme))
+            ticks_canvas(&it.ticks, theme, win_ms).or_else(|| candle_canvas(&it.bars, theme))
         }
     }
 }
 
-/// Draw the frozen last-30-seconds tick chart: the per-trade price path with a buy/sell
-/// quote-volume strip along the bottom — the detect-time snapshot of the move's ignition.
+/// Return the suffix of the frozen rows that falls inside the last `win_ms` before the detection.
 ///
-/// X maps the fixed 30-second window with the detection at the right edge, so a quiet start
-/// reads as empty space instead of stretching the first trades across the card. Shared with the
-/// hover popup, which draws the same rows enlarged; the `Arc` keeps the per-frame rebuild to a
-/// pointer clone.
+/// Rows are ordered oldest to newest with `t_rel_ms` at or below zero (zero = detection receipt),
+/// so the window is a suffix found by binary search.
+pub(super) fn window_slice(
+    ticks: &[moon_core::market::DetectTick],
+    win_ms: f32,
+) -> &[moon_core::market::DetectTick] {
+    &ticks[ticks.partition_point(|t| t.t_rel_ms < -win_ms)..]
+}
+
+/// First-to-last price change in percent over the configured tick window; `None` when the window
+/// holds under two trades. Feeds the Δ-window card field and keeps its contract in one place.
+pub(super) fn window_delta(ticks: &[moon_core::market::DetectTick], win_ms: f32) -> Option<f32> {
+    let w = window_slice(ticks, win_ms);
+    match (w.first(), w.last()) {
+        (Some(first), Some(last)) if w.len() >= 2 && first.price > 0.0 => {
+            Some((last.price / first.price - 1.0) * 100.0)
+        }
+        _ => None,
+    }
+}
+
+/// Draw the frozen tick chart: the per-trade price path with a buy/sell quote-volume strip along
+/// the bottom — the detect-time snapshot of the move's ignition, trimmed to the configured window
+/// (`win_ms` of the frozen 30-second snapshot).
+///
+/// X maps the fixed window with the detection at the right edge, so a quiet start reads as empty
+/// space instead of stretching the first trades across the card. The path is stepped — price
+/// holds level until the next trade — because a straight segment across a quiet gap would invent
+/// a gradual move that never printed. Shared with the hover popup, which draws the same rows
+/// enlarged; the `Arc` keeps the per-frame rebuild to a pointer clone.
 pub(super) fn ticks_canvas(
     ticks: &std::sync::Arc<Vec<moon_core::market::DetectTick>>,
     theme: &moon_core::config::ChartTheme,
+    win_ms: f32,
 ) -> Option<AnyElement> {
-    if ticks.len() < 2 {
+    let win = window_slice(ticks, win_ms);
+    if win.len() < 2 {
         return None;
     }
     let up = rgba_from(design::rgb_to_u32(theme.candle_up), 1.0);
     let down = rgba_from(design::rgb_to_u32(theme.candle_down), 1.0);
-    let line_rgb = if ticks[ticks.len() - 1].price >= ticks[0].price {
+    let line_rgb = if win[win.len() - 1].price >= win[0].price {
         theme.candle_up
     } else {
         theme.candle_down
@@ -423,9 +467,9 @@ pub(super) fn ticks_canvas(
                 if w < 2.0 || h < 2.0 {
                     return;
                 }
-                const WINDOW_MS: f32 = 30_000.0;
+                let win = window_slice(&ticks, win_ms);
                 let (mut hi, mut lo, mut vmax) = (f32::NEG_INFINITY, f32::INFINITY, 0.0f32);
-                for t in ticks.iter() {
+                for t in win {
                     hi = hi.max(t.price);
                     lo = lo.min(t.price);
                     vmax = vmax.max(t.quote);
@@ -441,11 +485,11 @@ pub(super) fn ticks_canvas(
                 let pad = (price_h * 0.12).max(1.0);
                 let usable = (price_h - 2.0 * pad).max(1.0);
                 let (ox, oy) = (bounds.origin.x, bounds.origin.y);
-                let xof = |t_rel: f32| ((t_rel + WINDOW_MS) / WINDOW_MS).clamp(0.0, 1.0) * w;
+                let xof = |t_rel: f32| ((t_rel + win_ms) / win_ms).clamp(0.0, 1.0) * w;
                 let yof = |price: f32| pad + (hi - price) / span * usable;
                 // Volume strip first, the price path over it.
                 if vmax > 0.0 {
-                    for t in ticks.iter() {
+                    for t in win {
                         let x = xof(t.t_rel_ms);
                         let vh = (t.quote / vmax * strip_h).max(1.0);
                         window.paint_quad(fill(
@@ -458,13 +502,18 @@ pub(super) fn ticks_canvas(
                     }
                 }
                 let mut pb = PathBuilder::stroke(px(1.5));
-                for (k, t) in ticks.iter().enumerate() {
-                    let p = gpui::point(ox + px(xof(t.t_rel_ms)), oy + px(yof(t.price)));
-                    if k == 0 {
-                        pb.move_to(p);
-                    } else {
-                        pb.line_to(p);
+                let mut prev_y: Option<f32> = None;
+                for t in win {
+                    let (x, y) = (xof(t.t_rel_ms), yof(t.price));
+                    match prev_y {
+                        None => pb.move_to(gpui::point(ox + px(x), oy + px(y))),
+                        Some(py) => {
+                            // Step: hold the previous price to this trade's time, then jump.
+                            pb.line_to(gpui::point(ox + px(x), oy + px(py)));
+                            pb.line_to(gpui::point(ox + px(x), oy + px(y)));
+                        }
                     }
+                    prev_y = Some(y);
                 }
                 if let Ok(path) = pb.build() {
                     window.paint_path(path, line_color);
@@ -641,7 +690,7 @@ fn mini_layout(
     it: &DetectItem,
     secs: u32,
     scfg: &DetectSizeCfg,
-    decimals: usize,
+    view: &DetectViewCfg,
     _theme: &moon_core::config::ChartTheme,
     badges: &BadgesConfig,
     p: MoonPalette,
@@ -657,7 +706,7 @@ fn mini_layout(
             it,
             secs,
             12.0,
-            decimals,
+            view,
             badges,
             p,
             is_light,
@@ -669,7 +718,7 @@ fn mini_layout(
             it,
             secs,
             12.0,
-            decimals,
+            view,
             badges,
             p,
             is_light,
@@ -698,7 +747,7 @@ fn medium_layout(
     it: &DetectItem,
     secs: u32,
     scfg: &DetectSizeCfg,
-    decimals: usize,
+    view: &DetectViewCfg,
     theme: &moon_core::config::ChartTheme,
     badges: &BadgesConfig,
     p: MoonPalette,
@@ -718,7 +767,7 @@ fn medium_layout(
             it,
             secs,
             13.0,
-            decimals,
+            view,
             badges,
             p,
             is_light,
@@ -732,7 +781,7 @@ fn medium_layout(
             it,
             secs,
             13.0,
-            decimals,
+            view,
             badges,
             p,
             is_light,
@@ -764,7 +813,7 @@ fn medium_layout(
             it,
             secs,
             13.0,
-            decimals,
+            view,
             badges,
             p,
             is_light,
@@ -798,7 +847,7 @@ fn medium_layout(
             .flex()
             .items_center()
             .overflow_hidden();
-        if let Some(el) = chart_el(it, scfg, theme) {
+        if let Some(el) = chart_el(it, scfg, view.ticks_window_ms(), theme) {
             zone = zone.child(div().w_full().h(px(zh)).flex_none().child(el));
         }
         zone = zone
@@ -828,7 +877,7 @@ fn large_layout(
     it: &DetectItem,
     secs: u32,
     scfg: &DetectSizeCfg,
-    decimals: usize,
+    view: &DetectViewCfg,
     theme: &moon_core::config::ChartTheme,
     badges: &BadgesConfig,
     p: MoonPalette,
@@ -847,7 +896,7 @@ fn large_layout(
             it,
             secs,
             14.0,
-            decimals,
+            view,
             badges,
             p,
             is_light,
@@ -861,7 +910,7 @@ fn large_layout(
             it,
             secs,
             14.0,
-            decimals,
+            view,
             badges,
             p,
             is_light,
@@ -887,7 +936,7 @@ fn large_layout(
             it,
             secs,
             14.0,
-            decimals,
+            view,
             badges,
             p,
             is_light,
@@ -920,7 +969,7 @@ fn large_layout(
             .flex()
             .items_center()
             .overflow_hidden();
-        if let Some(el) = chart_el(it, scfg, theme) {
+        if let Some(el) = chart_el(it, scfg, view.ticks_window_ms(), theme) {
             zone = zone.child(div().w_full().h(px(zh)).flex_none().child(el));
         }
         zone = zone

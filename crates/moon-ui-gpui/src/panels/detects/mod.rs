@@ -518,7 +518,7 @@ impl Render for DetectsPanel {
                     }),
                 )
                 // Hovering shows the detection's full parameter set with an enlarged frozen
-                // tick chart of the 30 seconds before it fired; see [`hover`].
+                // tick chart of the configured window before it fired; see [`hover`].
                 .tooltip(move |_window, app| {
                     let data = hover_data.clone();
                     app.new(|_| hover::DetectHoverView::new(data)).into()
