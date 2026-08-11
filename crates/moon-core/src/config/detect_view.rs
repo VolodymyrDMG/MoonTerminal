@@ -43,6 +43,9 @@ pub enum DetectChart {
     Candles,
     /// 24-hour price line.
     Line,
+    /// Frozen per-trade chart of the last 30 seconds before the detection: the price path with a
+    /// buy/sell quote-volume strip — the detect-time snapshot of the move's ignition.
+    Ticks,
 }
 
 /// Field assigned to a card slot.
