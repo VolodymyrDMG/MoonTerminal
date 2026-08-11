@@ -48,6 +48,10 @@ const CHARTS: [(DetectChart, &str); 4] = [
     (DetectChart::Ticks, "detects.cfg.chart_ticks"),
 ];
 
+/// Tick-window choices in seconds — spans of the frozen 30-second trade snapshot, so 30 is the
+/// ceiling; one group-wide setting shared by the tick chart, the Δ-ticks field, and the hover.
+const TICK_WINS: [u8; 3] = [5, 15, 30];
+
 /// Returns the localization key for a slot-field label.
 fn field_key(f: DetectField) -> &'static str {
     match f {
@@ -58,6 +62,7 @@ fn field_key(f: DetectField) -> &'static str {
         DetectField::Core => "detects.view.core",
         DetectField::Delta24h => "detects.field.d24",
         DetectField::Delta1h => "detects.field.d1",
+        DetectField::DeltaWin => "detects.field.dwin",
         DetectField::Exchange => "detects.view.exchange",
         DetectField::ExchangeKind => "detects.view.exchange_kind",
     }
@@ -454,6 +459,28 @@ fn content(
             }
         })
         .render();
+    // The tick window is group-wide (like delta decimals), but it lives on the chart row because
+    // that is where the "Ticks" mode it windows is chosen.
+    let entity_win = entity.clone();
+    let cur_win = cfg.ticks_window_secs_clamped();
+    let win_seg = MoonSegmentedControl::new("det-view-tick-win")
+        .accent(MoonAccent::Blue)
+        .items(TICK_WINS.iter().map(|s| {
+            let mut it = MoonSegmentItem::new("", format!("{s}")).width(30.0);
+            if u32::from(*s) == cur_win {
+                it = it.selected(true);
+            }
+            it
+        }))
+        .on_click(move |ix, _, _w, app| {
+            if let Some(s) = TICK_WINS.get(ix) {
+                let s = *s;
+                entity_win.update(app, |this, cx| {
+                    this.write_view(cx, |c| c.ticks_window_secs = s);
+                });
+            }
+        })
+        .render();
     let chart_row = h_flex()
         .w_full()
         .items_center()
@@ -466,7 +493,16 @@ fn content(
                 .text_color(rgb(p.text))
                 .child(t!("detects.cfg.chart").to_string()),
         )
-        .child(chart_seg);
+        .child(chart_seg)
+        .child(div().flex_1())
+        .child(
+            div()
+                .text_size(design::t_caption(cx))
+                .text_color(rgb(p.text_muted))
+                .mr(design::ui_px(cx, 5.0))
+                .child(t!("detects.cfg.ticks_win").to_string()),
+        )
+        .child(win_seg);
 
     // Server rail: swatch caption plus width and gradient sliders.
     let rail_caption = h_flex()
