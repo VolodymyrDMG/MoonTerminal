@@ -8,6 +8,7 @@ fn detect_view_roundtrip_preserves_every_field() {
     let mut cfg = DetectViewCfg::default();
     cfg.size = DETECT_SIZE_LARGE;
     cfg.delta_decimals = 0;
+    cfg.ticks_window_secs = 15;
     cfg.mini.w = 77;
     cfg.mini.h = 33;
     cfg.mini.chart = DetectChart::Line;
@@ -49,4 +50,18 @@ fn detect_view_partial_toml_fills_defaults() {
     // Everything else comes from the defaults.
     assert_eq!(cfg.mini, DetectViewCfg::default().mini);
     assert_eq!(cfg.medium.h, DetectViewCfg::default().medium.h);
+    assert_eq!(cfg.ticks_window_secs, 30);
+}
+
+/// The tick window clamps to 1..=30 seconds, and the legacy `0` (files from before the field
+/// existed deserialize per-field, but a hand-edited zero is possible) reads as the full 30.
+#[test]
+fn detect_view_ticks_window_clamps() {
+    let mut cfg = DetectViewCfg::default();
+    for (raw, want) in [(0u8, 30u32), (1, 1), (5, 5), (15, 15), (30, 30), (200, 30)] {
+        cfg.ticks_window_secs = raw;
+        assert_eq!(cfg.ticks_window_secs_clamped(), want, "raw {raw}");
+    }
+    cfg.ticks_window_secs = 15;
+    assert_eq!(cfg.ticks_window_ms(), 15_000.0);
 }
