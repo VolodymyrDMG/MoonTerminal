@@ -42,7 +42,7 @@ pub mod pane;
 #[cfg(windows)]
 pub mod readout;
 mod render_state;
-mod volume_graph;
+pub(crate) mod volume_graph;
 pub(crate) use render_state::arrival_flash_enabled;
 mod text;
 pub mod types;

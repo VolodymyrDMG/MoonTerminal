@@ -9,12 +9,14 @@
 //! built from the snapshot captured at detection time live in [`cards`].
 
 mod cards;
+mod hover;
 mod popup;
 
 #[cfg(test)]
 mod tests;
 
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crate::Backend;
@@ -50,8 +52,9 @@ pub(crate) struct DetectItem {
     bars: Vec<(f32, f32, f32, f32)>,
     /// Close prices over the 24-hour snapshot window for line mode, oldest to newest.
     line: Vec<f32>,
-    /// Last-30-seconds trades frozen at detection time for the ticks mini-chart.
-    ticks: Vec<moon_core::market::DetectTick>,
+    /// Last-30-seconds trades frozen at detection time for the ticks mini-chart and the hover
+    /// popup. Shared so per-frame card rebuilds and tooltip builders clone a pointer, not the rows.
+    ticks: Arc<Vec<moon_core::market::DetectTick>>,
     /// 24-hour and one-hour percentage price changes at detection time.
     delta_24h: f32,
     delta_1h: f32,
@@ -277,7 +280,7 @@ impl DetectsPanel {
                     // Refresh the snapshot and TTL in place when the same core and market fire again.
                     it.bars = snap.bars;
                     it.line = snap.line;
-                    it.ticks = snap.ticks;
+                    it.ticks = Arc::new(snap.ticks);
                     it.delta_24h = snap.delta_24h;
                     it.delta_1h = snap.delta_1h;
                     it.venue = snap.venue;
@@ -304,7 +307,7 @@ impl DetectsPanel {
                         ttl_ms: ttl,
                         bars: snap.bars,
                         line: snap.line,
-                        ticks: snap.ticks,
+                        ticks: Arc::new(snap.ticks),
                         delta_24h: snap.delta_24h,
                         delta_1h: snap.delta_1h,
                         venue: snap.venue,
@@ -485,6 +488,11 @@ impl Render for DetectsPanel {
         let toolbar = popup::toolbar(self, &cfg, p, cx);
         let divider = div().w_full().h(px(1.0)).flex_none().bg(rgb(p.border));
 
+        // The hover popup prints the detection time in the header clock's zone.
+        let zone = crate::chrome::clock::resolved_header_clock_zone(
+            self.backend.read(cx).header_clock_zone(),
+        );
+
         // Render fixed-size cards in reverse insertion order in a wrapping grid. Newly inserted
         // markets appear first; a repeated core-market detection refreshes its existing position.
         let mut container = h_flex().flex_wrap().gap_1p5().content_start();
@@ -498,6 +506,7 @@ impl Render for DetectsPanel {
             let secs = ((it.ttl_ms - (now - it.born_ms)) / 1000.0).ceil().max(0.0) as u32;
             let (core, market) = (it.core, it.market.clone());
             let market_rmb = it.market.clone();
+            let hover_data = hover::HoverData::build(it, &cfg, &theme, &badges, is_light, zone);
             let card = cards::card(it, secs, &cfg, &theme, &badges, p, is_light, cx)
                 .id(SharedString::from(format!("det-{i}")))
                 .cursor_pointer()
@@ -511,7 +520,14 @@ impl Render for DetectsPanel {
                         this.open_compare(core, market_rmb.clone(), cx);
                         cx.stop_propagation();
                     }),
-                );
+                )
+                // Hovering shows the detection's full parameter set with an enlarged frozen
+                // tick chart of the 30 seconds before it fired; see [`hover`].
+                .tooltip(move |_window, app| {
+                    let data = hover_data.clone();
+                    app.new(|_| hover::DetectHoverView::new(data)).into()
+                })
+                .tooltip_show_delay(Duration::from_millis(hover::SHOW_DELAY_MS));
             container = container.child(card);
         }
 
