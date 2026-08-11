@@ -291,20 +291,26 @@ impl RenderState {
             if let Some((buy_max, sell_max)) = self.panes[idx].volume_scale {
                 let vmax = buy_max.max(sell_max);
                 if vmax > 0.0 {
-                    let band_h = crate::chartdx::volume_graph::band_height_px(view.bounds[3]) / sf;
+                    use crate::chartdx::volume_graph::{
+                        SCALE_HEADROOM, band_height_px, format_quote_short,
+                    };
+                    let band_h = band_height_px(view.bounds[3]) / sf;
                     let label_x = plot_right - 6.0;
-                    for (value, y) in [
-                        (vmax, plot_bottom - band_h),
-                        (vmax * 0.5, plot_bottom - band_h * 0.5),
-                    ] {
+                    // Each label sits at the height its value actually draws at — the Moonbot
+                    // bracket: the top label tops the tallest visible column (below the band
+                    // ceiling thanks to the scale headroom), the second marks its half.
+                    let y_of = |value: f32| {
+                        plot_bottom - band_h * (value / (vmax * SCALE_HEADROOM)).min(1.0)
+                    };
+                    for value in [vmax, vmax * 0.5] {
                         draw_label_text_run(
                             &mut self.text_runs,
                             &mut self.text_run_cursor,
                             ctx,
                             self.label_font_delta,
-                            &crate::chartdx::volume_graph::format_quote_short(value),
+                            &format_quote_short(value),
                             label_x,
-                            y,
+                            y_of(value),
                             1.0,
                             0.5,
                             label_neutral,

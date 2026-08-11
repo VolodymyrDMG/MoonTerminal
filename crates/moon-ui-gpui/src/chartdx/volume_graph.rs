@@ -36,6 +36,13 @@ pub const BAND_UNDERLAY_RGBA: [f32; 4] = [1.0, 1.0, 1.0, 0.045];
 /// Hairline top edge of the graph band, separating it from the chart above.
 pub const BAND_EDGE_RGBA: [f32; 4] = [1.0, 1.0, 1.0, 0.10];
 
+/// Headroom multiplier over the visible maximum when normalizing column heights.
+///
+/// Moonbot's tallest bar never touches the top of its volume zone: the scale keeps reserve
+/// above it, and the bracket labels sit at the heights of their true values. Without headroom
+/// the maximum column stretched exactly to the band ceiling and read as clipped.
+pub const SCALE_HEADROOM: f32 = 1.28;
+
 /// Fraction of the pane height the graph band may occupy, mirrored by the volume shader.
 pub const BAND_FRACTION: f32 = 0.22;
 
