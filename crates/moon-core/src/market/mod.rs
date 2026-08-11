@@ -24,7 +24,7 @@ pub use candles::{CandleViewCfg, ChartCandle};
 pub use screener::ScreenerRow;
 pub use source::{
     pick_market_for_coin, CandleReadParams, ChartHistoryBuffers, ChartHistoryCursor,
-    ChartHistoryRead, DetectSnapshot, LatestPriceError, MarketDataSource, MarketLabel,
+    ChartHistoryRead, DetectSnapshot, DetectTick, LatestPriceError, MarketDataSource, MarketLabel,
     MarketRevisions, MarketTickerReadout,
 };
 

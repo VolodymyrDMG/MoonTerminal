@@ -41,10 +41,11 @@ const TABS: [(u8, &str); 3] = [
 ];
 
 /// Chart types as `(value, localization key)` pairs.
-const CHARTS: [(DetectChart, &str); 3] = [
+const CHARTS: [(DetectChart, &str); 4] = [
     (DetectChart::None, "detects.cfg.chart_none"),
     (DetectChart::Candles, "detects.cfg.chart_candles"),
     (DetectChart::Line, "detects.cfg.chart_line"),
+    (DetectChart::Ticks, "detects.cfg.chart_ticks"),
 ];
 
 /// Returns the localization key for a slot-field label.

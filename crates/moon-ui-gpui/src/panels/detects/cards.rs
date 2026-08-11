@@ -384,7 +384,95 @@ fn chart_el(
         DetectChart::None => None,
         DetectChart::Candles => candle_canvas(&it.bars, theme),
         DetectChart::Line => line_canvas(&it.line, theme),
+        // Falls back to candles when the provider retained no trade ring for the market, so the
+        // card never goes blank just because the ticks were unavailable.
+        DetectChart::Ticks => {
+            ticks_canvas(&it.ticks, theme).or_else(|| candle_canvas(&it.bars, theme))
+        }
     }
+}
+
+/// Draw the frozen last-30-seconds tick chart: the per-trade price path with a buy/sell
+/// quote-volume strip along the bottom — the detect-time snapshot of the move's ignition.
+///
+/// X maps the fixed 30-second window with the detection at the right edge, so a quiet start
+/// reads as empty space instead of stretching the first trades across the card.
+fn ticks_canvas(
+    ticks: &[moon_core::market::DetectTick],
+    theme: &moon_core::config::ChartTheme,
+) -> Option<AnyElement> {
+    if ticks.len() < 2 {
+        return None;
+    }
+    let up = rgba_from(design::rgb_to_u32(theme.candle_up), 1.0);
+    let down = rgba_from(design::rgb_to_u32(theme.candle_down), 1.0);
+    let line_rgb = if ticks[ticks.len() - 1].price >= ticks[0].price {
+        theme.candle_up
+    } else {
+        theme.candle_down
+    };
+    let line_color = rgba_from(design::rgb_to_u32(line_rgb), 1.0);
+    let ticks: Vec<moon_core::market::DetectTick> = ticks.to_vec();
+    Some(
+        canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let w = f32::from(bounds.size.width);
+                let h = f32::from(bounds.size.height);
+                if w < 2.0 || h < 2.0 {
+                    return;
+                }
+                const WINDOW_MS: f32 = 30_000.0;
+                let (mut hi, mut lo, mut vmax) = (f32::NEG_INFINITY, f32::INFINITY, 0.0f32);
+                for t in &ticks {
+                    hi = hi.max(t.price);
+                    lo = lo.min(t.price);
+                    vmax = vmax.max(t.quote);
+                }
+                if !hi.is_finite() || !lo.is_finite() {
+                    return;
+                }
+                let span = (hi - lo).max(hi.abs() * 1e-6 + 1e-9);
+                // The bottom quarter carries the volume strip; the price path keeps its own
+                // padding above, mirroring the terminal's main volume band composition.
+                let strip_h = (h * 0.26).clamp(3.0, 40.0);
+                let price_h = (h - strip_h - 2.0).max(1.0);
+                let pad = (price_h * 0.12).max(1.0);
+                let usable = (price_h - 2.0 * pad).max(1.0);
+                let (ox, oy) = (bounds.origin.x, bounds.origin.y);
+                let xof = |t_rel: f32| ((t_rel + WINDOW_MS) / WINDOW_MS).clamp(0.0, 1.0) * w;
+                let yof = |price: f32| pad + (hi - price) / span * usable;
+                // Volume strip first, the price path over it.
+                if vmax > 0.0 {
+                    for t in &ticks {
+                        let x = xof(t.t_rel_ms);
+                        let vh = (t.quote / vmax * strip_h).max(1.0);
+                        window.paint_quad(fill(
+                            Bounds::from_corners(
+                                gpui::point(ox + px(x - 0.75), oy + px(h - vh)),
+                                gpui::point(ox + px((x + 0.75).min(w)), oy + px(h)),
+                            ),
+                            if t.sell { down } else { up },
+                        ));
+                    }
+                }
+                let mut pb = PathBuilder::stroke(px(1.5));
+                for (k, t) in ticks.iter().enumerate() {
+                    let p = gpui::point(ox + px(xof(t.t_rel_ms)), oy + px(yof(t.price)));
+                    if k == 0 {
+                        pb.move_to(p);
+                    } else {
+                        pb.line_to(p);
+                    }
+                }
+                if let Ok(path) = pb.build() {
+                    window.paint_path(path, line_color);
+                }
+            },
+        )
+        .size_full()
+        .into_any_element(),
+    )
 }
 
 /// Draw hollow vector candles as quads in the element's actual bounds.
