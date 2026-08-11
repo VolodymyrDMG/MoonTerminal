@@ -61,3 +61,53 @@ fn stale_detect_navigation_is_rejected_before_card_removal() {
         );
     }
 }
+
+/// The hover popup's 30-second aggregates must split turnover by side, take the LAST trade as the
+/// detection-moment price, and measure the window delta first-to-last — not high-to-low, which
+/// would overstate every burst.
+#[test]
+fn hover_tick_stats_split_sides_and_measure_first_to_last() {
+    use moon_core::market::DetectTick;
+
+    use super::hover::{TickStats, price_range, tick_stats};
+
+    let ticks = [
+        DetectTick {
+            t_rel_ms: -20_000.0,
+            price: 100.0,
+            quote: 500.0,
+            sell: false,
+        },
+        DetectTick {
+            t_rel_ms: -10_000.0,
+            price: 108.0,
+            quote: 300.0,
+            sell: true,
+        },
+        DetectTick {
+            t_rel_ms: -1_000.0,
+            price: 104.0,
+            quote: 200.0,
+            sell: false,
+        },
+    ];
+    let stats = tick_stats(&ticks);
+    assert_eq!(stats.trades, 3);
+    assert_eq!(stats.buy_quote, 700.0);
+    assert_eq!(stats.sell_quote, 300.0);
+    assert_eq!(stats.last_price, Some(104.0));
+    // First 100 → last 104 is +4%, even though the window high was 108.
+    let d = stats.d30s_pct.expect("two or more trades give a delta");
+    assert!((d - 4.0).abs() < 1e-4, "first-to-last delta, got {d}");
+    // The chart corner labels use the true extremes.
+    assert_eq!(price_range(&ticks), Some((108.0, 100.0)));
+
+    // No trades: everything empty rather than zeros pretending to be measurements.
+    assert_eq!(tick_stats(&[]), TickStats::default());
+    assert_eq!(price_range(&[]), None);
+
+    // One trade prices the moment but cannot measure a change.
+    let one = tick_stats(&ticks[..1]);
+    assert_eq!(one.last_price, Some(100.0));
+    assert_eq!(one.d30s_pct, None);
+}
