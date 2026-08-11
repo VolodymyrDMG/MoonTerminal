@@ -395,9 +395,11 @@ fn chart_el(
 /// quote-volume strip along the bottom — the detect-time snapshot of the move's ignition.
 ///
 /// X maps the fixed 30-second window with the detection at the right edge, so a quiet start
-/// reads as empty space instead of stretching the first trades across the card.
-fn ticks_canvas(
-    ticks: &[moon_core::market::DetectTick],
+/// reads as empty space instead of stretching the first trades across the card. Shared with the
+/// hover popup, which draws the same rows enlarged; the `Arc` keeps the per-frame rebuild to a
+/// pointer clone.
+pub(super) fn ticks_canvas(
+    ticks: &std::sync::Arc<Vec<moon_core::market::DetectTick>>,
     theme: &moon_core::config::ChartTheme,
 ) -> Option<AnyElement> {
     if ticks.len() < 2 {
@@ -411,7 +413,7 @@ fn ticks_canvas(
         theme.candle_down
     };
     let line_color = rgba_from(design::rgb_to_u32(line_rgb), 1.0);
-    let ticks: Vec<moon_core::market::DetectTick> = ticks.to_vec();
+    let ticks = std::sync::Arc::clone(ticks);
     Some(
         canvas(
             |_, _, _| (),
@@ -423,7 +425,7 @@ fn ticks_canvas(
                 }
                 const WINDOW_MS: f32 = 30_000.0;
                 let (mut hi, mut lo, mut vmax) = (f32::NEG_INFINITY, f32::INFINITY, 0.0f32);
-                for t in &ticks {
+                for t in ticks.iter() {
                     hi = hi.max(t.price);
                     lo = lo.min(t.price);
                     vmax = vmax.max(t.quote);
@@ -443,7 +445,7 @@ fn ticks_canvas(
                 let yof = |price: f32| pad + (hi - price) / span * usable;
                 // Volume strip first, the price path over it.
                 if vmax > 0.0 {
-                    for t in &ticks {
+                    for t in ticks.iter() {
                         let x = xof(t.t_rel_ms);
                         let vh = (t.quote / vmax * strip_h).max(1.0);
                         window.paint_quad(fill(
@@ -478,7 +480,7 @@ fn ticks_canvas(
 ///
 /// The high-low wick has segments above and below the body. Rising and doji bodies are outlined;
 /// falling bodies are filled. Scaling uses the high-low range with a 1px inset.
-fn candle_canvas(
+pub(super) fn candle_canvas(
     bars: &[(f32, f32, f32, f32)],
     theme: &moon_core::config::ChartTheme,
 ) -> Option<AnyElement> {
