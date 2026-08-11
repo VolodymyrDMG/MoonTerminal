@@ -1228,11 +1228,13 @@ impl MetalLayers {
         self.view_uniform
             .write(device, "moon_chart_view_uniform", &[view]);
         // The volume graph draws with the same live view but its own normalization: the columns
-        // carry quote units and scale to the visible window's maxima, not the ring-wide trade
-        // maxima the legacy bars used.
+        // carry quote units and scale to the visible window's maxima with Moonbot-style headroom
+        // above the tallest column, so nothing ever reads as clipped against the band ceiling.
         let mut volume_view = view;
-        volume_view.volume_buy_inv = 1.0 / self.volume_columns_scale.0;
-        volume_view.volume_sell_inv = 1.0 / self.volume_columns_scale.1;
+        volume_view.volume_buy_inv =
+            1.0 / (self.volume_columns_scale.0 * super::volume_graph::SCALE_HEADROOM);
+        volume_view.volume_sell_inv =
+            1.0 / (self.volume_columns_scale.1 * super::volume_graph::SCALE_HEADROOM);
         volume_view.volume_alpha = super::volume_graph::GRAPH_ALPHA;
         self.volume_view_uniform
             .write(device, "moon_chart_volume_view_uniform", &[volume_view]);
