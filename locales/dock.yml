@@ -202,6 +202,39 @@ detects.view.exchange_kind:
   ru: "Тип биржи"
   en: "Exchange type"
   es: "Tipo de exchange"
+# Hover popup on a feed card: detection parameters + enlarged 30-second tick chart.
+detects.hover.d30:
+  ru: "Δ 30с"
+  en: "Δ 30s"
+  es: "Δ 30s"
+detects.hover.price:
+  ru: "Цена"
+  en: "Price"
+  es: "Precio"
+detects.hover.buys:
+  ru: "Покупки 30с"
+  en: "Buys 30s"
+  es: "Compras 30s"
+detects.hover.sells:
+  ru: "Продажи 30с"
+  en: "Sells 30s"
+  es: "Ventas 30s"
+detects.hover.trades:
+  ru: "Сделок 30с"
+  en: "Trades 30s"
+  es: "Trades 30s"
+detects.hover.keep:
+  ru: "Держать"
+  en: "Keep"
+  es: "Mantener"
+detects.hover.no_ticks:
+  ru: "Нет сделок за 30 с до детекта"
+  en: "No trades in the 30 s before the detect"
+  es: "Sin operaciones en los 30 s previos"
+detects.hover.hint:
+  ru: "ЛКМ — график · ПКМ — сравнение"
+  en: "LMB — chart · RMB — compare"
+  es: "LMB — gráfico · RMB — comparar"
 dock.todo.assets:
   ru: "Активы: канал балансов ядра пока не подключён"
   en: "Assets: core balance feed not wired yet"
