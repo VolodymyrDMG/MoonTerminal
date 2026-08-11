@@ -67,6 +67,9 @@ pub enum DetectField {
     Delta24h,
     /// 1-hour delta, %.
     Delta1h,
+    /// Price change over the configured tick window ([`DetectViewCfg::ticks_window_secs`]),
+    /// computed from the frozen last-trades snapshot; "—" when the window holds under two trades.
+    DeltaWin,
     /// Exchange name.
     Exchange,
     /// Exchange kind (spot/futures/…).
@@ -75,7 +78,7 @@ pub enum DetectField {
 
 impl DetectField {
     /// All assignable fields (slot-dropdown order; `None` = "—").
-    pub const ALL: [DetectField; 9] = [
+    pub const ALL: [DetectField; 10] = [
         DetectField::None,
         DetectField::Coin,
         DetectField::Time,
@@ -83,6 +86,7 @@ impl DetectField {
         DetectField::Core,
         DetectField::Delta24h,
         DetectField::Delta1h,
+        DetectField::DeltaWin,
         DetectField::Exchange,
         DetectField::ExchangeKind,
     ];
@@ -237,8 +241,12 @@ fn default_large() -> DetectSizeCfg {
 pub struct DetectViewCfg {
     /// Active card size: 0=mini, 1=medium, 2=large.
     pub size: u8,
-    /// Decimal places for deltas (Δ24h/Δ1h), 0..=2 — ONE setting for all sizes.
+    /// Decimal places for deltas (Δ24h/Δ1h/Δ window), 0..=2 — ONE setting for all sizes.
     pub delta_decimals: u8,
+    /// Tick-chart window in seconds (1..=30 of the frozen 30-second trade snapshot) — ONE setting
+    /// for all sizes, shared by the card chart, the Δ-window field, and the hover popup. The UI
+    /// offers 5/15/30; `0` means "unset" in old files and reads as the full 30.
+    pub ticks_window_secs: u8,
     pub mini: DetectSizeCfg,
     pub medium: DetectSizeCfg,
     pub large: DetectSizeCfg,
@@ -249,6 +257,7 @@ impl Default for DetectViewCfg {
         Self {
             size: DETECT_SIZE_MEDIUM,
             delta_decimals: 1,
+            ticks_window_secs: 30,
             mini: default_mini(),
             medium: default_medium(),
             large: default_large(),
@@ -265,6 +274,19 @@ impl DetectViewCfg {
     /// Number of delta decimal places, clamped to 0..=2.
     pub fn delta_decimals_clamped(&self) -> usize {
         self.delta_decimals.min(2) as usize
+    }
+
+    /// Tick-chart window in whole seconds, clamped to 1..=30; the legacy `0` reads as 30.
+    pub fn ticks_window_secs_clamped(&self) -> u32 {
+        match self.ticks_window_secs {
+            0 => 30,
+            s => u32::from(s.min(30)),
+        }
+    }
+
+    /// Tick-chart window in milliseconds, for the chart canvases and window-delta math.
+    pub fn ticks_window_ms(&self) -> f32 {
+        self.ticks_window_secs_clamped() as f32 * 1000.0
     }
 
     /// Settings for a specific size.

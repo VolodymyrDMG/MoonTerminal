@@ -1,5 +1,5 @@
 //! Hover popup for one detection card: the parameters of the detected situation next to an
-//! enlarged frozen tick chart of the last 30 seconds before the detection fired.
+//! enlarged frozen tick chart of the configured window (5/15/30 s) before the detection fired.
 //!
 //! The popup is a gpui tooltip built from [`HoverData`], a plain-data snapshot captured at
 //! card-render time, so the builder closure owns no panel borrow and outlives the frame. The chart
@@ -66,7 +66,10 @@ pub(super) struct HoverData {
     delta_1h: f32,
     /// Delta precision shared with the cards, from the gear popup.
     decimals: usize,
-    /// Last-30-seconds trades shared with the card's ticks chart mode.
+    /// Tick window in whole seconds from the gear popup; every tick-derived figure and label in
+    /// the popup follows it.
+    win_secs: u32,
+    /// Frozen trades shared with the card's ticks chart mode (up to 30 s before the detection).
     ticks: Arc<Vec<DetectTick>>,
     /// Frozen five-minute candles for the chart fallback when no trades were retained.
     bars: Vec<(f32, f32, f32, f32)>,
@@ -113,6 +116,7 @@ impl HoverData {
             delta_24h: it.delta_24h,
             delta_1h: it.delta_1h,
             decimals: cfg.delta_decimals_clamped(),
+            win_secs: cfg.ticks_window_secs_clamped(),
             ticks: Arc::clone(&it.ticks),
             bars: it.bars.clone(),
             theme: theme.clone(),
@@ -120,23 +124,24 @@ impl HoverData {
     }
 }
 
-/// Aggregates of the frozen last-30-seconds trades printed in the popup's parameter grid.
+/// Aggregates of the windowed frozen trades printed in the popup's parameter grid.
 #[derive(Debug, Default, PartialEq)]
 pub(super) struct TickStats {
     pub trades: usize,
-    /// Buy-side and sell-side quote turnover over the frozen window.
+    /// Buy-side and sell-side quote turnover over the window.
     pub buy_quote: f32,
     pub sell_quote: f32,
     /// First-to-last price change in percent; `None` with fewer than two trades.
-    pub d30s_pct: Option<f32>,
-    /// Last frozen trade price — the market price at the detection moment.
+    pub win_pct: Option<f32>,
+    /// Last windowed trade price — the market price at the detection moment.
     pub last_price: Option<f32>,
 }
 
-/// Fold the frozen rows into the popup's aggregates.
+/// Fold rows (pre-trimmed to the configured window by [`cards::window_slice`]) into the popup's
+/// aggregates.
 ///
 /// Args:
-///     ticks: Frozen last-30-seconds trades, oldest to newest.
+///     ticks: Frozen windowed trades, oldest to newest.
 ///
 /// Returns:
 ///     Turnover split by side, trade count, window price change, and the detection-moment price.
@@ -155,7 +160,7 @@ pub(super) fn tick_stats(ticks: &[DetectTick]) -> TickStats {
     }
     if let (Some(first), Some(last)) = (ticks.first(), ticks.last()) {
         if ticks.len() >= 2 && first.price > 0.0 {
-            out.d30s_pct = Some((last.price / first.price - 1.0) * 100.0);
+            out.win_pct = Some((last.price / first.price - 1.0) * 100.0);
         }
     }
     out
@@ -186,7 +191,10 @@ impl Render for DetectHoverView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p = MoonPalette::active(cx);
         let d = &self.data;
-        let stats = tick_stats(&d.ticks);
+        // Every tick-derived figure follows the gear popup's window, matching the card chart.
+        let win_ms = d.win_secs as f32 * 1000.0;
+        let win = cards::window_slice(&d.ticks, win_ms);
+        let stats = tick_stats(win);
         let (pos, neg) = (design::positive_color(p), design::danger_color(p));
 
         // --- Header: coin, card badge, direction, and detection wall-clock time. ---
@@ -259,7 +267,7 @@ impl Render for DetectHoverView {
 
         // --- Enlarged frozen chart with price-range corner labels. ---
         let chart_h = design::ui_value(cx, CHART_H);
-        let (chart, is_ticks) = match cards::ticks_canvas(&d.ticks, &d.theme) {
+        let (chart, is_ticks) = match cards::ticks_canvas(&d.ticks, &d.theme, win_ms) {
             Some(c) => (Some(c), true),
             // Same fallback order as the card mode: candles, then an explanatory note.
             None => (cards::candle_canvas(&d.bars, &d.theme), false),
@@ -277,7 +285,7 @@ impl Render for DetectHoverView {
                 .overflow_hidden()
                 .child(c);
             if is_ticks {
-                if let Some((hi, lo)) = price_range(&d.ticks) {
+                if let Some((hi, lo)) = price_range(win) {
                     // The low label clears the volume strip, whose height rule the canvas shares.
                     let strip_h = (chart_h * 0.26).clamp(3.0, 40.0);
                     z =
@@ -303,7 +311,9 @@ impl Render for DetectHoverView {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(mut_text(t!("detects.hover.no_ticks").to_string(), p).render())
+                .child(
+                    mut_text(t!("detects.hover.no_ticks", s = d.win_secs).to_string(), p).render(),
+                )
                 .into_any_element()
         };
 
@@ -313,7 +323,7 @@ impl Render for DetectHoverView {
             cell(t!("detects.field.d24").to_string(), pct(d.delta_24h), p),
             cell(t!("detects.field.d1").to_string(), pct(d.delta_1h), p),
         );
-        let d30 = match stats.d30s_pct {
+        let dwin = match stats.win_pct {
             Some(v) => pct_text(v, d.decimals, p),
             None => mut_text("—".to_string(), p).render().into_any_element(),
         };
@@ -324,7 +334,7 @@ impl Render for DetectHoverView {
             None => mut_text("—".to_string(), p).render().into_any_element(),
         };
         let row2 = grid_row(
-            cell(t!("detects.hover.d30").to_string(), d30, p),
+            cell(t!("detects.hover.d30", s = d.win_secs).to_string(), dwin, p),
             cell(t!("detects.hover.price").to_string(), price, p),
         );
         let quote = |v: f32, col: u32| {
@@ -334,19 +344,19 @@ impl Render for DetectHoverView {
         };
         let row3 = grid_row(
             cell(
-                t!("detects.hover.buys").to_string(),
+                t!("detects.hover.buys", s = d.win_secs).to_string(),
                 quote(stats.buy_quote, pos),
                 p,
             ),
             cell(
-                t!("detects.hover.sells").to_string(),
+                t!("detects.hover.sells", s = d.win_secs).to_string(),
                 quote(stats.sell_quote, neg),
                 p,
             ),
         );
         let row4 = grid_row(
             cell(
-                t!("detects.hover.trades").to_string(),
+                t!("detects.hover.trades", s = d.win_secs).to_string(),
                 soft_text(stats.trades.to_string(), p)
                     .render()
                     .into_any_element(),
