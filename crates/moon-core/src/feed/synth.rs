@@ -124,6 +124,7 @@ pub fn run(
                 keep_alert_secs: 0,
                 add_to_chart: w as u32,
                 keep_in_chart_secs: 31_536_000,
+                open_chart: false,
                 sound_name: None,
                 is_alert: false,
                 kind: 0,
