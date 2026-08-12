@@ -39,9 +39,9 @@ general.charts_auto_activate:
   en: "Switch to chart on detect"
   es: "Cambiar al gráfico al detectar"
 general.charts_auto_activate_hint:
-  ru: "Для детектов, у которых стратегия задала AddToChart: панель графиков сама переключается на вкладку Add с новой монетой. Окно приложения при этом не выдёргивается на передний план. Выкл — монета добавляется на вкладку тихо, как раньше."
-  en: "For detects whose strategy sets AddToChart: the chart panel switches itself to the Add tab that received the new coin. The application window is not raised. Off — the coin is added to the tab silently, as before."
-  es: "Para detecciones cuya estrategia define AddToChart: el panel de gráficos cambia solo a la pestaña Add que recibió la moneda nueva. La ventana de la aplicación no se trae al frente. Des — la moneda se añade a la pestaña en silencio, como antes."
+  ru: "Как в мунботе: у стратегии SilentNoCharts=NO — монета детекта открывается на Main (по одной за проход); задан AddToChart — панель сама переключается на вкладку Add с новой монетой. Окно приложения на передний план не выдёргивается. Выкл — детекты не трогают графики, как раньше."
+  en: "As in Moonbot: strategy SilentNoCharts=NO — the detect's coin opens on Main (one per pass); AddToChart set — the panel switches itself to the Add tab that received the new coin. The application window is never raised. Off — detects leave the charts alone, as before."
+  es: "Como en Moonbot: estrategia con SilentNoCharts=NO — la moneda detectada se abre en Main (una por pasada); con AddToChart — el panel cambia solo a la pestaña Add que recibió la moneda. La ventana de la aplicación no se trae al frente. Des — las detecciones no tocan los gráficos, como antes."
 general.separate_control_zones:
   ru: "Раздельные зоны управления"
   en: "Separate control zones"

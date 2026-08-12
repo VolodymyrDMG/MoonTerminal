@@ -17,6 +17,9 @@ pub(super) struct AlertParams {
     /// Chart-tab number (0 means do not add).
     pub add_to_chart: u32,
     pub keep_in_chart_secs: u32,
+    /// Open the coin's chart on signal: Moonbot `SilentNoCharts` inverted. The `Default` (false =
+    /// do not open) covers detects without a strategy snapshot.
+    pub open_chart: bool,
     /// Sound name (WAV stem such as BABYTOY/ding1/…) when set by the strategy. `None` means
     /// no sound. This is extracted by scanning string fields: the sound field's schema name
     /// is unstable, but its VALUE matches the file stem.
@@ -83,20 +86,23 @@ fn sound_is_none(s: &StrategySnapshot) -> bool {
     false
 }
 
-/// Reads alert defaults `(SoundAlert, sound)` from the SCHEMA for a strategy kind.
-/// The server does NOT send fields equal to their schema defaults (as with all other strategy
-/// fields), so a strategy using the DEFAULT sound arrives without a sound field and cannot be
-/// found by scanning the snapshot. Read it from this kind's schema-field `default_value`s.
+/// Reads alert defaults `(SoundAlert, SilentNoCharts, sound)` from the SCHEMA for a strategy
+/// kind. The server does NOT send fields equal to their schema defaults (as with all other
+/// strategy fields), so a strategy using the DEFAULT sound arrives without a sound field and
+/// cannot be found by scanning the snapshot. Read it from this kind's schema-field
+/// `default_value`s.
 fn schema_alert_defaults(
     schema: &StrategySchema,
     s: &StrategySnapshot,
-) -> (Option<bool>, Option<String>) {
+) -> (Option<bool>, Option<bool>, Option<String>) {
     let mut sound_alert = None;
+    let mut silent_no_charts = None;
     let mut sound = None;
     for sec in schema.editor_sections_for_strategy_kind(s.kind()) {
         for f in &sec.fields {
             match (f.name.as_str(), f.default_value.as_ref()) {
                 ("SoundAlert", Some(FieldValue::Bool(b))) => sound_alert = Some(*b),
+                ("SilentNoCharts", Some(FieldValue::Bool(b))) => silent_no_charts = Some(*b),
                 (_, Some(FieldValue::String(sv))) => {
                     if sound.is_none() {
                         sound = sound_stem(sv);
@@ -106,7 +112,7 @@ fn schema_alert_defaults(
             }
         }
     }
-    (sound_alert, sound)
+    (sound_alert, silent_no_charts, sound)
 }
 
 /// Reads an integer strategy field (AddToChart/KeepInChart/KeepAlert), accepting ANY numeric
@@ -127,15 +133,22 @@ fn field_secs_or(s: &StrategySnapshot, name: &str, default: u32) -> u32 {
 }
 
 pub(super) fn alert_params(s: &StrategySnapshot, schema: Option<&StrategySchema>) -> AlertParams {
-    let (def_sound_alert, def_sound) = schema
+    let (def_sound_alert, def_silent_no_charts, def_sound) = schema
         .map(|sc| schema_alert_defaults(sc, s))
-        .unwrap_or((None, None));
+        .unwrap_or((None, None, None));
     // SoundAlert: use the snapshot value when present. Absence means `equal to the schema
     // default` (the server omits such values), so use the schema default.
     let sound_alert = if s.fields.get("SoundAlert").is_some() {
         s.field_bool_or_false("SoundAlert")
     } else {
         def_sound_alert.unwrap_or(false)
+    };
+    // SilentNoCharts, same resolution order. With neither a snapshot value nor a schema default,
+    // read it as SILENT (no chart): opening charts on a guess would yank the user around.
+    let silent_no_charts = if s.fields.get("SilentNoCharts").is_some() {
+        s.field_bool_or_false("SilentNoCharts")
+    } else {
+        def_silent_no_charts.unwrap_or(true)
     };
     // Play EXACTLY the sound selected by the strategy:
     //  - an explicit stem in the snapshot wins;
@@ -155,6 +168,7 @@ pub(super) fn alert_params(s: &StrategySnapshot, schema: Option<&StrategySchema>
         keep_alert_secs: field_secs_or(s, "KeepAlert", 60),
         add_to_chart: field_secs_or(s, "AddToChart", 0),
         keep_in_chart_secs: field_secs_or(s, "KeepInChart", 60),
+        open_chart: !silent_no_charts,
         sound_name,
     }
 }
@@ -431,3 +445,6 @@ pub(super) fn effective_strat_id(snap: &moonproto::MoonStateSnapshot, strat_id: 
         .map(|c| c.manual_strategy_id)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+mod tests;
