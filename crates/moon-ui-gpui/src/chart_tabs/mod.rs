@@ -1,5 +1,6 @@
 //! Custom chart tab strip ported from the egui chart tabs: Main plus AddToChart-N.
-//! It owns active-tab selection without automatically switching on a detect, chart double-click
+//! It owns active-tab selection without automatically switching on a detect (unless the
+//! `charts_auto_activate` setting opts in; see [`ingest`]), chart double-click
 //! routing to Main, and detaching tabs into OS windows when Classic owns the workspace. Auto keeps
 //! its chart tabs inside the group window. The center `DockArea` panel contains this strip and the
 //! active `ChartPanel`; detects, orders, and lower tabs are separate dock panels.

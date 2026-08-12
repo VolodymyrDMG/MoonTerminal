@@ -492,6 +492,9 @@ impl Render for DetectsPanel {
         let zone = crate::chrome::clock::resolved_header_clock_zone(
             self.backend.read(cx).header_clock_zone(),
         );
+        // Gear toggle: with the popup off, cards get no tooltip at all — nothing is built or
+        // delayed, so scanning the feed costs nothing extra.
+        let hover_on = cfg.hover_popup;
 
         // Render fixed-size cards in reverse insertion order in a wrapping grid. Newly inserted
         // markets appear first; a repeated core-market detection refreshes its existing position.
@@ -506,7 +509,6 @@ impl Render for DetectsPanel {
             let secs = ((it.ttl_ms - (now - it.born_ms)) / 1000.0).ceil().max(0.0) as u32;
             let (core, market) = (it.core, it.market.clone());
             let market_rmb = it.market.clone();
-            let hover_data = hover::HoverData::build(it, &cfg, &theme, &badges, is_light, zone);
             let card = cards::card(it, secs, &cfg, &theme, &badges, p, is_light, cx)
                 .id(SharedString::from(format!("det-{i}")))
                 .cursor_pointer()
@@ -520,14 +522,20 @@ impl Render for DetectsPanel {
                         this.open_compare(core, market_rmb.clone(), cx);
                         cx.stop_propagation();
                     }),
-                )
-                // Hovering shows the detection's full parameter set with an enlarged frozen
-                // tick chart of the configured window before it fired; see [`hover`].
-                .tooltip(move |_window, app| {
+                );
+            // Hovering shows the detection's full parameter set with an enlarged frozen tick
+            // chart of the configured window before it fired; see [`hover`]. The gear's popup
+            // toggle removes the tooltip entirely rather than showing an empty shell.
+            let card = if hover_on {
+                let hover_data = hover::HoverData::build(it, &cfg, &theme, &badges, is_light, zone);
+                card.tooltip(move |_window, app| {
                     let data = hover_data.clone();
                     app.new(|_| hover::DetectHoverView::new(data)).into()
                 })
-                .tooltip_show_delay(Duration::from_millis(hover::SHOW_DELAY_MS));
+                .tooltip_show_delay(Duration::from_millis(hover::SHOW_DELAY_MS))
+            } else {
+                card
+            };
             container = container.child(card);
         }
 
