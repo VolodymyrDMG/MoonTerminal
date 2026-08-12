@@ -90,6 +90,10 @@ detects.cfg.ticks_win:
   ru: "Окно тиков, с"
   en: "Tick window, s"
   es: "Ventana de ticks, s"
+detects.cfg.hover_popup:
+  ru: "Попап при наведении на карточку"
+  en: "Hover popup on cards"
+  es: "Popup al pasar sobre la tarjeta"
 detects.cfg.rail_frame:
   ru: "Полоса сервера"
   en: "Server rail"

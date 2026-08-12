@@ -9,6 +9,7 @@ fn detect_view_roundtrip_preserves_every_field() {
     cfg.size = DETECT_SIZE_LARGE;
     cfg.delta_decimals = 0;
     cfg.ticks_window_secs = 15;
+    cfg.hover_popup = false;
     cfg.mini.w = 77;
     cfg.mini.h = 33;
     cfg.mini.chart = DetectChart::Line;
@@ -51,6 +52,8 @@ fn detect_view_partial_toml_fills_defaults() {
     assert_eq!(cfg.mini, DetectViewCfg::default().mini);
     assert_eq!(cfg.medium.h, DetectViewCfg::default().medium.h);
     assert_eq!(cfg.ticks_window_secs, 30);
+    // Files from before the hover popup existed read as ENABLED, not silently off.
+    assert!(cfg.hover_popup);
 }
 
 /// The tick window clamps to 1..=30 seconds, and the legacy `0` (files from before the field

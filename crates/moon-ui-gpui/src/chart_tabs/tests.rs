@@ -238,3 +238,21 @@ fn prune_coin_selection_drops_markets_outside_the_new_scope() {
         HashSet::from([(7, "BTCUSDT".to_string()), (7, "ETHUSDT".to_string())])
     );
 }
+
+/// The opt-in `charts_auto_activate` wiring in `chart_tabs/ingest.rs` must stay exactly opt-in:
+/// the switch reads the setting, only strip tabs qualify (a detached window is already on
+/// screen), and the OS window is never raised. The plausible regression is someone "simplifying"
+/// ingest by dropping the guard — restoring the pre-setting behavior where detects never switch —
+/// or inverting it into an unconditional switch that yanks the user mid-scan.
+#[test]
+fn detect_auto_activation_is_gated_on_the_setting_and_skips_detached_windows() {
+    let source = include_str!("ingest.rs");
+
+    assert!(source.contains("let auto_activate = b.config.charts_auto_activate;"));
+    assert!(source.contains("if auto_activate {"));
+    assert!(source.contains("let tab = Tab::Add(n, bucket);"));
+    // Only strip tabs are recorded as activation targets; the detached branch records nothing.
+    assert!(source.contains("last_strip_target = Some((n, bucket.clone()));"));
+    // Activation must not raise the OS window: no activate_window call anywhere in ingest.
+    assert!(!source.contains("activate_window"));
+}
