@@ -247,6 +247,9 @@ pub struct DetectViewCfg {
     /// for all sizes, shared by the card chart, the Δ-window field, and the hover popup. The UI
     /// offers 5/15/30; `0` means "unset" in old files and reads as the full 30.
     pub ticks_window_secs: u8,
+    /// Card hover popup with detection parameters and the enlarged tick chart — ONE setting for
+    /// all sizes. On by default; files from before this field read as enabled.
+    pub hover_popup: bool,
     pub mini: DetectSizeCfg,
     pub medium: DetectSizeCfg,
     pub large: DetectSizeCfg,
@@ -258,6 +261,7 @@ impl Default for DetectViewCfg {
             size: DETECT_SIZE_MEDIUM,
             delta_decimals: 1,
             ticks_window_secs: 30,
+            hover_popup: true,
             mini: default_mini(),
             medium: default_medium(),
             large: default_large(),
