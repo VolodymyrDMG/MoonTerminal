@@ -278,6 +278,11 @@ pub struct DetectRow {
     /// Strategy `KeepInChart` duration in seconds before closing the automatically added coin
     /// chart while retaining the tab, defaulting to 60.
     pub keep_in_chart_secs: u32,
+    /// Whether the source strategy wants the coin's chart opened when the signal arrives:
+    /// Moonbot's `SilentNoCharts=NO` (the bot-side default). `false` when the strategy set
+    /// `SilentNoCharts=YES`, when there is no strategy snapshot, or when no schema default is
+    /// known — silence is the safe reading, matching "a detect must not pull the user unasked".
+    pub open_chart: bool,
     /// Strategy sound name as a WAV stem to play when the detect arrives; `None` is silent.
     pub sound_name: Option<String>,
     /// Whether this detect is a drawn-object alert trigger, `DETECT_KIND_ALERT`. These are shown and

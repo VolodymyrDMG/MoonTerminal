@@ -2,7 +2,7 @@
 
 // NOT `use super::*`: the parent imports `gpui::*`, whose `test` macro shadows `#[test]`.
 use super::{
-    AutoWorkspaceChartState, preferred_auto_workspace_market, windows::chart_detach_allowed,
+    preferred_auto_workspace_market, windows::chart_detach_allowed, AutoWorkspaceChartState,
 };
 use moon_core::config::WorkspaceMode;
 use moon_core::market::MarketLabel;
@@ -208,6 +208,11 @@ fn detect_auto_activation_is_gated_on_the_setting_and_skips_detached_windows() {
     assert!(source.contains("let tab = Tab::Add(n, bucket);"));
     // Only strip tabs are recorded as activation targets; the detached branch records nothing.
     assert!(source.contains("last_strip_target = Some((n, bucket.clone()));"));
+    // Moonbot signal charts (SilentNoCharts=NO) stay behind the SAME opt-in: the collector is
+    // gated on the setting, and the coin lands on Main through panel reuse, not a new window.
+    assert!(source.contains("&& det.open_chart"));
+    assert!(source.contains("if auto_activate\n"));
+    assert!(source.contains("p.open_or_focus(core, market, pcx)"));
     // Activation must not raise the OS window: no activate_window call anywhere in ingest.
     assert!(!source.contains("activate_window"));
 }

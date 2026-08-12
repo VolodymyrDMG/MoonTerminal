@@ -1039,6 +1039,7 @@ pub(super) fn run(
                             keep_alert_secs: params.keep_alert_secs,
                             add_to_chart: params.add_to_chart,
                             keep_in_chart_secs: params.keep_in_chart_secs,
+                            open_chart: params.open_chart,
                             sound_name: params.sound_name,
                             is_alert: d.is_alert_fire(),
                             // Kind of the strategy that produced the detect, used for its type badge.
