@@ -70,6 +70,9 @@ pub enum DetectField {
     /// Price change over the configured tick window ([`DetectViewCfg::ticks_window_secs`]),
     /// computed from the frozen last-trades snapshot; "—" when the window holds under two trades.
     DeltaWin,
+    /// Total quote turnover (buys + sells) over the configured tick window, from the same frozen
+    /// snapshot, in Moonbot short-amount form; "—" when the window holds no trades.
+    VolWin,
     /// Exchange name.
     Exchange,
     /// Exchange kind (spot/futures/…).
@@ -78,7 +81,7 @@ pub enum DetectField {
 
 impl DetectField {
     /// All assignable fields (slot-dropdown order; `None` = "—").
-    pub const ALL: [DetectField; 10] = [
+    pub const ALL: [DetectField; 11] = [
         DetectField::None,
         DetectField::Coin,
         DetectField::Time,
@@ -87,6 +90,7 @@ impl DetectField {
         DetectField::Delta24h,
         DetectField::Delta1h,
         DetectField::DeltaWin,
+        DetectField::VolWin,
         DetectField::Exchange,
         DetectField::ExchangeKind,
     ];

@@ -9,12 +9,12 @@
 
 use gpui::*;
 use moon_ui::{
-    MoonBadge, MoonBadgeSize, MoonBadgeVariant, MoonPalette, MoonText, h_flex, rgba_from, v_flex,
+    h_flex, rgba_from, v_flex, MoonBadge, MoonBadgeSize, MoonBadgeVariant, MoonPalette, MoonText,
 };
 
 use moon_core::config::{
-    BadgesConfig, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart,
-    DetectField, DetectSizeCfg, DetectSlot, DetectViewCfg, detect_slot_count,
+    detect_slot_count, BadgesConfig, DetectChart, DetectField, DetectSizeCfg, DetectSlot,
+    DetectViewCfg, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI,
 };
 
 use super::DetectItem;
@@ -314,6 +314,25 @@ fn chip(
             cx,
         )
         .into_any_element(),
+        // Windowed turnover in Moonbot short form ("12.3 k$"); "—" without frozen trades. Bold
+        // mono like the deltas, neutral color — volume has no sign to color by. The generic
+        // over-chart backing below covers it.
+        DetectField::VolWin => {
+            let (label, col) = match window_volume(&it.ticks, view.ticks_window_ms()) {
+                Some(v) => (
+                    crate::chartdx::volume_graph::format_quote_short(v),
+                    p.text_soft,
+                ),
+                None => ("—".to_string(), p.text_muted),
+            };
+            MoonText::new(label)
+                .color(col)
+                .weight(700.0)
+                .mono(true)
+                .uppercase(false)
+                .render()
+                .into_any_element()
+        }
         DetectField::Exchange => {
             let exchange = crate::controls::exchange_display_name(&it.exchange_name);
             if exchange.is_empty() {
@@ -429,6 +448,14 @@ pub(super) fn window_delta(ticks: &[moon_core::market::DetectTick], win_ms: f32)
         }
         _ => None,
     }
+}
+
+/// Total quote turnover (buys plus sells) over the configured tick window; `None` when the window
+/// holds no trades — an absent snapshot must read as "no data", not as a confident zero. Feeds
+/// the volume card field on the same window contract as [`window_delta`].
+pub(super) fn window_volume(ticks: &[moon_core::market::DetectTick], win_ms: f32) -> Option<f32> {
+    let w = window_slice(ticks, win_ms);
+    (!w.is_empty()).then(|| w.iter().map(|t| t.quote).sum())
 }
 
 /// Draw the frozen tick chart: the per-trade price path with a buy/sell quote-volume strip along

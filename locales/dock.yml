@@ -166,6 +166,10 @@ detects.field.dwin:
   ru: "Δ тиков"
   en: "Δ ticks"
   es: "Δ ticks"
+detects.field.vwin:
+  ru: "Объём тиков"
+  en: "Tick volume"
+  es: "Volumen de ticks"
 detects.view.size_mini:
   ru: "Мини"
   en: "Mini"
