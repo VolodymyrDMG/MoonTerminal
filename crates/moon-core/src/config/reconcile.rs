@@ -8,9 +8,9 @@ use super::groups::GroupConfig;
 use super::hotkeys::HotkeysConfig;
 use super::lang::Language;
 use super::schema::{
-    clamp_chart_memory_percent, clamp_chart_stack_height, repair_ui_font_delta, repair_ui_scale,
-    ServerEntry, ServerMeta, ServersFile, SettingsFile, UiThemeMode, COREID_UID_VERSION,
-    SCHEMA_VERSION,
+    COREID_UID_VERSION, SCHEMA_VERSION, ServerEntry, ServerMeta, ServersFile, SettingsFile,
+    UiThemeMode, clamp_chart_memory_percent, clamp_chart_stack_height, repair_ui_font_delta,
+    repair_ui_scale,
 };
 use super::servers::{self, CoreSortMode};
 use super::uid_counter::UidCounter;
@@ -30,6 +30,8 @@ pub struct Merged {
     pub market_mode: MarketDataMode,
     /// Separate chart tab per core (AddToChart).
     pub charts_split_by_core: bool,
+    /// Switch the chart panel to the AddToChart tab when a flagged detect arrives.
+    pub charts_auto_activate: bool,
     /// AddToChart stack: vertical scrolling (true) or divided window height (false).
     pub charts_stack_scroll: bool,
     /// Compress the scroll stack as it fills, without a scrollbar.
@@ -90,6 +92,7 @@ pub fn merge(sf: ServersFile, meta: SettingsFile, uid_floor: Option<u64>) -> Mer
     let language = meta.language;
     let market_mode = meta.market_mode;
     let charts_split_by_core = meta.charts_split_by_core;
+    let charts_auto_activate = meta.charts_auto_activate;
     let charts_stack_scroll = meta.charts_stack_scroll;
     let charts_stack_compress = meta.charts_stack_compress;
     let chart_stack_height = clamp_chart_stack_height(meta.chart_stack_height);
@@ -167,6 +170,7 @@ pub fn merge(sf: ServersFile, meta: SettingsFile, uid_floor: Option<u64>) -> Mer
         language,
         market_mode,
         charts_split_by_core,
+        charts_auto_activate,
         charts_stack_scroll,
         charts_stack_compress,
         chart_stack_height,
@@ -200,6 +204,7 @@ pub fn split(
     language: Language,
     market_mode: MarketDataMode,
     charts_split_by_core: bool,
+    charts_auto_activate: bool,
     charts_stack_scroll: bool,
     charts_stack_compress: bool,
     chart_stack_height: u16,
@@ -230,6 +235,7 @@ pub fn split(
         language,
         market_mode,
         charts_split_by_core,
+        charts_auto_activate,
         charts_stack_scroll,
         charts_stack_compress,
         chart_stack_height: clamp_chart_stack_height(chart_stack_height),

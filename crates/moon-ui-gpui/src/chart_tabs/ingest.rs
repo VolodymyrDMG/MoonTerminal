@@ -3,7 +3,7 @@
 
 use gpui::*;
 
-use super::{AddChartStack, ChartTabs};
+use super::{AddChartStack, ChartTabs, Tab};
 use moon_core::config::ChartBucket;
 use moon_core::session::CoreId;
 
@@ -11,8 +11,10 @@ impl ChartTabs {
     /// Ingest AddToChart detects with `add_to_chart > 0` by creating or populating a tab.
     ///
     /// The tab key is the core's `ChartBucket` (per-core, shared, or named bundle), resolved from
-    /// core config and global `charts_split_by_core`. This does not switch `active`, preserving the
-    /// behavior that a detect must not pull the user to a chart.
+    /// core config and global `charts_split_by_core`. By default this does not switch `active` — a
+    /// detect must not pull the user to a chart unasked. The `charts_auto_activate` setting opts
+    /// in: the strip tab that received the NEWEST AddToChart detect becomes active (detached
+    /// windows are skipped — their charts are already on screen), without raising the OS window.
     ///
     /// Args:
     ///     cx: Parent context used to read Backend detects and create or update stacks.
@@ -20,13 +22,15 @@ impl ChartTabs {
     /// Returns:
     ///     Nothing; new detects and stack observers are incorporated in place.
     pub(super) fn ingest(&mut self, cx: &mut Context<Self>) {
-        let (split, fresh, cursors): (
+        let (split, auto_activate, fresh, cursors): (
+            bool,
             bool,
             Vec<(u32, CoreId, ChartBucket, String, f64)>,
             Vec<(CoreId, u64)>,
         ) = {
             let b = self.backend.read(cx);
             let split = b.config.charts_split_by_core;
+            let auto_activate = b.config.charts_auto_activate;
             let mut fresh = Vec::new();
             let mut cursors = Vec::new();
             for s in b
@@ -70,7 +74,7 @@ impl ChartTabs {
                     cursors.push((id, mx));
                 }
             }
-            (split, fresh, cursors)
+            (split, auto_activate, fresh, cursors)
         };
         for (id, mx) in cursors {
             self.add_seq.insert(id, mx);
@@ -93,6 +97,9 @@ impl ChartTabs {
             self.backend.clone(),
             self.group.clone(),
         );
+        // The newest detect that landed in a STRIP tab (not a detached window); with
+        // `charts_auto_activate` on, that tab becomes active below.
+        let mut last_strip_target: Option<(u32, ChartBucket)> = None;
         for (n, core, bucket, market, ttl) in fresh {
             let in_detached = self
                 .detached
@@ -112,6 +119,8 @@ impl ChartTabs {
                     moon_core::detect_diag::line(&format!(
                         "[ingest] +coin n={n} bucket={bucket:?} market={market} → DETACHED-окно"
                     ));
+                } else {
+                    last_strip_target = Some((n, bucket.clone()));
                 }
                 tab.update(cx, |p, pcx| p.add_coin(core, &market, ttl, pcx));
             } else {
@@ -225,7 +234,21 @@ impl ChartTabs {
                     "[ingest] NEW tab n={n} bucket={bucket:?} (total_tabs={})",
                     self.add.len()
                 ));
-                // Do not change `active`; a new tab must not pull the user away.
+                // `active` does not change here; the opt-in switch happens once, below.
+                last_strip_target = Some((n, bucket.clone()));
+            }
+        }
+        // Opt-in auto-activation (`charts_auto_activate`): show the tab of the newest AddToChart
+        // detect. Only the visible tab selection changes — the OS window is never raised, so the
+        // user is not yanked across Spaces mid-typing.
+        if auto_activate {
+            if let Some((n, bucket)) = last_strip_target {
+                let tab = Tab::Add(n, bucket);
+                if self.active != tab {
+                    self.active = tab;
+                    self.sync_inactive_chart_visibility(cx);
+                    self.sync_active_scale(cx);
+                }
             }
         }
         self.sync_seen_for_active(cx);

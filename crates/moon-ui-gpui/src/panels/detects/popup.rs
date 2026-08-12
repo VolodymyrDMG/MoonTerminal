@@ -11,7 +11,7 @@ use gpui::*;
 use moon_ui::{
     MoonAccent, MoonButton, MoonButtonSize, MoonButtonVariant, MoonDropdown, MoonMenuSize,
     MoonNotification, MoonPalette, MoonPopover, MoonPopoverPlacement, MoonSegmentItem,
-    MoonSegmentedControl, MoonSlider, MoonWindowExt as _, h_flex, v_flex,
+    MoonSegmentedControl, MoonSlider, MoonToggle, MoonWindowExt as _, h_flex, v_flex,
 };
 use rust_i18n::t;
 
@@ -504,6 +504,21 @@ fn content(
         )
         .child(win_seg);
 
+    // Group-wide hover-popup toggle: the card popup with the detection's parameters and the
+    // enlarged tick chart. Lives beside the chart controls because that is what it enlarges.
+    let entity_hover = entity.clone();
+    let hover_row = h_flex().w_full().items_center().child(
+        MoonToggle::new("det-view-hover")
+            .checked(cfg.hover_popup)
+            .label(t!("detects.cfg.hover_popup").to_string())
+            .on_change(move |v: &bool, _w, app| {
+                let on = *v;
+                entity_hover.update(app, |this, cx| {
+                    this.write_view(cx, |c| c.hover_popup = on);
+                });
+            }),
+    );
+
     // Server rail: swatch caption plus width and gradient sliders.
     let rail_caption = h_flex()
         .items_center()
@@ -604,7 +619,8 @@ fn content(
                     .gap(design::ui_px(cx, 6.0))
                     .child(w_row)
                     .child(h_row)
-                    .child(chart_row),
+                    .child(chart_row)
+                    .child(hover_row),
             ),
         )
         .child(
