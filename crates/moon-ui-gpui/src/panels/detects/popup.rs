@@ -9,21 +9,21 @@
 
 use gpui::*;
 use moon_ui::{
-    MoonAccent, MoonButton, MoonButtonSize, MoonButtonVariant, MoonDropdown, MoonMenuSize,
-    MoonNotification, MoonPalette, MoonPopover, MoonPopoverPlacement, MoonSegmentItem,
-    MoonSegmentedControl, MoonSlider, MoonToggle, MoonWindowExt as _, h_flex, v_flex,
+    h_flex, v_flex, MoonAccent, MoonButton, MoonButtonSize, MoonButtonVariant, MoonDropdown,
+    MoonMenuSize, MoonNotification, MoonPalette, MoonPopover, MoonPopoverPlacement,
+    MoonSegmentItem, MoonSegmentedControl, MoonSlider, MoonToggle, MoonWindowExt as _,
 };
 use rust_i18n::t;
 
 use moon_core::config::{
-    DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart, DetectField,
-    DetectViewCfg, detect_slot_count,
+    detect_slot_count, DetectChart, DetectField, DetectViewCfg, DETECT_SIZE_LARGE,
+    DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI,
 };
 
-use super::{DetectsPanel, cards};
+use super::{cards, DetectsPanel};
 use crate::design;
 use crate::panels::{
-    POPUP_GROUP_INSET, RadioMark, popup_close_button, popup_group, popup_title, radio_items,
+    popup_close_button, popup_group, popup_title, radio_items, RadioMark, POPUP_GROUP_INSET,
 };
 
 /// Popup width in logical pixels: three large-slot columns (76-pixel dropdown plus three 20-pixel
@@ -63,6 +63,7 @@ fn field_key(f: DetectField) -> &'static str {
         DetectField::Delta24h => "detects.field.d24",
         DetectField::Delta1h => "detects.field.d1",
         DetectField::DeltaWin => "detects.field.dwin",
+        DetectField::VolWin => "detects.field.vwin",
         DetectField::Exchange => "detects.view.exchange",
         DetectField::ExchangeKind => "detects.view.exchange_kind",
     }
