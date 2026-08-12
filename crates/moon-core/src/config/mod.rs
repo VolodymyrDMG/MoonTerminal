@@ -47,20 +47,20 @@ mod tests;
 
 pub use badges::{BadgeEntry, BadgesConfig};
 pub use detect_view::{
-    detect_slot_count, DetectChart, DetectField, DetectSizeCfg, DetectSlot, DetectViewCfg,
-    DetectViewFile, DETECT_RAIL_MAX, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI,
+    DETECT_RAIL_MAX, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart,
+    DetectField, DetectSizeCfg, DetectSlot, DetectViewCfg, DetectViewFile, detect_slot_count,
 };
 pub use groups::{
-    GroupConfig, GroupExitSettings, GroupTradeSettings, TakeProfitMode, DEFAULT_ORDER_SIZES_USD,
+    DEFAULT_ORDER_SIZES_USD, GroupConfig, GroupExitSettings, GroupTradeSettings, TakeProfitMode,
 };
 pub use hotkeys::{
-    HotkeysConfig, MouseGestureBinding, MANUAL_STRATEGY_KEYS, ORDER_SIZE_KEYS, SELL_PRESET_KEYS,
+    HotkeysConfig, MANUAL_STRATEGY_KEYS, MouseGestureBinding, ORDER_SIZE_KEYS, SELL_PRESET_KEYS,
 };
 pub use lang::Language;
 pub use layout::{
-    clamp_auto_workspace_rail_width, DetachedLayout, GeomRect, GroupLayout, ReportFilterPrefs,
-    WindowLayout, WorkspaceMode, AUTO_WORKSPACE_RAIL_WIDTH_DEFAULT, AUTO_WORKSPACE_RAIL_WIDTH_MAX,
-    AUTO_WORKSPACE_RAIL_WIDTH_MIN,
+    AUTO_WORKSPACE_RAIL_WIDTH_DEFAULT, AUTO_WORKSPACE_RAIL_WIDTH_MAX,
+    AUTO_WORKSPACE_RAIL_WIDTH_MIN, DetachedLayout, GeomRect, GroupLayout, ReportFilterPrefs,
+    WindowLayout, WorkspaceMode, clamp_auto_workspace_rail_width,
 };
 pub use news_tags::NewsTagSettings;
 pub use orders::{LineStyle, OrdersStyle, OrdersStyleSet};
@@ -155,6 +155,9 @@ pub struct AppConfig {
     pub market_mode: MarketDataMode,
     /// Separate AddToChart tab per core (settings.toml).
     pub charts_split_by_core: bool,
+    /// Switch the chart panel to the AddToChart tab when a detect with `AddToChart > 0` arrives
+    /// (settings.toml). Defaults to off: a detect must not pull the user to a chart unasked.
+    pub charts_auto_activate: bool,
     /// AddToChart stack: vertical scrolling (true) or divided window height (false, as before).
     pub charts_stack_scroll: bool,
     /// Compress the scroll stack as it fills so no scrollbar appears. Defaults to false.
@@ -232,6 +235,7 @@ impl AppConfig {
             language: Default::default(),
             market_mode: Default::default(),
             charts_split_by_core: Default::default(),
+            charts_auto_activate: Default::default(),
             charts_stack_scroll: Default::default(),
             charts_stack_compress: Default::default(),
             chart_stack_height: Default::default(),
@@ -326,6 +330,7 @@ impl AppConfig {
                 language: merged.language,
                 market_mode: merged.market_mode,
                 charts_split_by_core: merged.charts_split_by_core,
+                charts_auto_activate: merged.charts_auto_activate,
                 charts_stack_scroll: merged.charts_stack_scroll,
                 charts_stack_compress: merged.charts_stack_compress,
                 chart_stack_height: merged.chart_stack_height,
@@ -551,6 +556,7 @@ impl AppConfig {
             language: Language::default(),
             market_mode: MarketDataMode::default(),
             charts_split_by_core: true,
+            charts_auto_activate: false,
             charts_stack_scroll: false,
             charts_stack_compress: false,
             chart_stack_height: schema::default_chart_stack_height(),
@@ -609,6 +615,7 @@ impl AppConfig {
             self.language,
             self.market_mode,
             self.charts_split_by_core,
+            self.charts_auto_activate,
             self.charts_stack_scroll,
             self.charts_stack_compress,
             self.chart_stack_height,
@@ -707,6 +714,7 @@ impl AppConfig {
             Language::default(),
             MarketDataMode::default(),
             true,  // The chart toggle is non-structural; no rebuild.
+            false, // charts_auto_activate is behavioral, not structural.
             false, // charts_stack_scroll is purely visual, not structural.
             false, // charts_stack_compress is purely visual.
             schema::default_chart_stack_height(), // Stack height is not structural.

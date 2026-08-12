@@ -1,8 +1,8 @@
 use super::super::schema::{
-    default_ui_font_delta, default_ui_scale, ServersFile, SettingsFile, SCHEMA_VERSION,
+    SCHEMA_VERSION, ServersFile, SettingsFile, default_ui_font_delta, default_ui_scale,
 };
-use super::{merge, Merged};
-use crate::config::{GroupConfig, DEFAULT_ORDER_SIZES_USD};
+use super::{Merged, merge};
+use crate::config::{DEFAULT_ORDER_SIZES_USD, GroupConfig};
 
 /// Merge a settings file carrying nothing but the two scaling knobs.
 fn merged_with(ui_scale: f32, ui_font_delta: f32) -> Merged {
@@ -173,4 +173,22 @@ fn every_group_is_repaired_even_after_an_earlier_change() {
         DEFAULT_ORDER_SIZES_USD[0]
     );
     assert_eq!(merged.groups[1].trade.exit, Default::default());
+}
+
+/// `charts_auto_activate` flows file → merge → runtime, and an old settings.toml without the
+/// field reads as OFF: silently upgrading everyone to tab-stealing charts would be hostile.
+#[test]
+fn charts_auto_activate_merges_and_defaults_off() {
+    let old: SettingsFile = toml::from_str("version = 1").expect("legacy settings parse");
+    assert!(
+        !old.charts_auto_activate,
+        "files from before the field must stay quiet"
+    );
+
+    let on = SettingsFile {
+        version: SCHEMA_VERSION,
+        charts_auto_activate: true,
+        ..Default::default()
+    };
+    assert!(merge(ServersFile::default(), on, None).charts_auto_activate);
 }
