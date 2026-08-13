@@ -3747,7 +3747,7 @@ dependencies = [
 [[package]]
 name = "moon-collections"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "indexmap",
  "moon-gpui-util",
@@ -3792,7 +3792,7 @@ dependencies = [
 [[package]]
 name = "moon-derive-refineable"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3802,7 +3802,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "accesskit",
  "anyhow",
@@ -3884,7 +3884,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-linux"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "accesskit",
  "accesskit_unix",
@@ -3935,7 +3935,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-macos"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -3982,7 +3982,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-macros"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -3993,7 +3993,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-platform"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "console_error_panic_hook",
  "moon-gpui",
@@ -4006,7 +4006,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-shared-string"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "schemars",
  "serde",
@@ -4016,7 +4016,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-util"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "anyhow",
  "log",
@@ -4026,7 +4026,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-web"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
@@ -4050,7 +4050,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-wgpu"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4079,7 +4079,7 @@ dependencies = [
 [[package]]
 name = "moon-gpui-windows"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "accesskit",
  "accesskit_windows",
@@ -4107,7 +4107,7 @@ dependencies = [
 [[package]]
 name = "moon-http-client"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -4127,7 +4127,7 @@ dependencies = [
 [[package]]
 name = "moon-media"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "anyhow",
  "bindgen",
@@ -4142,7 +4142,7 @@ dependencies = [
 [[package]]
 name = "moon-perf"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "moon-collections",
  "serde",
@@ -4152,7 +4152,7 @@ dependencies = [
 [[package]]
 name = "moon-refineable"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "moon-derive-refineable",
 ]
@@ -4160,7 +4160,7 @@ dependencies = [
 [[package]]
 name = "moon-scheduler"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "async-task",
  "backtrace",
@@ -4175,7 +4175,7 @@ dependencies = [
 [[package]]
 name = "moon-sum-tree"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "heapless",
  "log",
@@ -4186,7 +4186,7 @@ dependencies = [
 [[package]]
 name = "moon-ui"
 version = "0.1.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "moon-ui-components",
  "moon-ui-components-assets",
@@ -4195,7 +4195,7 @@ dependencies = [
 [[package]]
 name = "moon-ui-components"
 version = "0.1.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "aho-corasick",
  "anyhow",
@@ -4245,7 +4245,7 @@ dependencies = [
 [[package]]
 name = "moon-ui-components-assets"
 version = "0.1.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "anyhow",
  "log",
@@ -4259,7 +4259,7 @@ dependencies = [
 [[package]]
 name = "moon-ui-components-macros"
 version = "0.1.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4309,7 +4309,7 @@ dependencies = [
 [[package]]
 name = "moon-util-macros"
 version = "0.0.0"
-source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#fc63b5581871467a90dc878b9736746a463f0b03"
+source = "git+https://github.com/VolodymyrDMG/MoonUI?branch=fix%2Fmacos-ctrl-left-click#236dfd2978602c065ccc136ea339e3f0fe3ad590"
 dependencies = [
  "moon-perf",
  "quote",

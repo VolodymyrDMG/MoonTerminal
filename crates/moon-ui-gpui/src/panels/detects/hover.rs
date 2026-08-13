@@ -111,7 +111,13 @@ impl HoverData {
             born_ms: it.born_ms,
             zone,
             keep_secs: (it.ttl_ms / 1000.0).round().max(0.0) as u32,
-            exchange: crate::controls::exchange_display_name(&it.exchange_name),
+            // Captioned through the shared venue directory, like the card's Exchange chip:
+            // upstream v0.20 identifies an exchange by its platform code, not its reported name.
+            exchange: it
+                .venue
+                .as_ref()
+                .map(crate::controls::venue_label)
+                .unwrap_or_default(),
             exchange_kind: it.exchange_kind.clone(),
             delta_24h: it.delta_24h,
             delta_1h: it.delta_1h,

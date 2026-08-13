@@ -252,6 +252,7 @@ fn a_clean_core_group_list_round_trips_through_merge_and_split() {
         merged.language,
         merged.market_mode,
         merged.charts_split_by_core,
+        merged.charts_auto_activate,
         merged.charts_stack_scroll,
         merged.charts_stack_compress,
         merged.chart_stack_height,
