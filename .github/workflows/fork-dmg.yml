@@ -1,0 +1,59 @@
+# FORK-ONLY (VolodymyrDMG): macOS .dmg for feature-branch tags.
+#
+# Upstream v0.24 split CI in two: `build` ships only the Windows .exe plus tests, and the
+# universal macOS .dmg moved into `release.yml` — whose first job requires a canonical
+# `vX.Y.Z` tag on `main` and whose publish step needs the upstream-only RELEASE_ADMIN_TOKEN.
+# A fork tag like `v0.25-move.18` therefore builds no macOS binary at all.
+#
+# This workflow restores the old fork flow: every `v*-move*` tag produces a universal
+# MoonTerminal.dmg as a RUN ARTIFACT (no GitHub Release, no secrets). The job body mirrors
+# the `macos` job of release.yml — two cross-built slices lipo-joined by make-dmg.sh — so a
+# future upstream change is a copy-paste refresh here. Not for upstream pull requests.
+name: fork-dmg
+
+on:
+  push:
+    tags: ["v*-move*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-dmg-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: macOS .dmg (universal, fork artifact)
+    runs-on: macos-14
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
+      - name: Build release binary (Apple Silicon)
+        run: cargo build -p moon-ui-gpui --bin moonterminal --release --locked --target aarch64-apple-darwin
+      - name: Stage the Apple Silicon slice and free its target dir
+        run: |
+          mkdir -p stage
+          mv target/aarch64-apple-darwin/release/moonterminal stage/moonterminal-arm64
+          rm -rf target/aarch64-apple-darwin
+      - name: Build release binary (Intel)
+        run: cargo build -p moon-ui-gpui --bin moonterminal --release --locked --target x86_64-apple-darwin
+      - name: Stage the Intel slice
+        run: mv target/x86_64-apple-darwin/release/moonterminal stage/moonterminal-x86_64
+      - name: Package .app + .dmg
+        run: bash .github/scripts/make-dmg.sh
+      - uses: actions/upload-artifact@v7
+        with:
+          name: MoonTerminal-${{ github.run_number }}
+          path: dist/MoonTerminal.dmg
+          if-no-files-found: error
