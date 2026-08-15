@@ -51,8 +51,14 @@ jobs:
           rm -rf target/aarch64-apple-darwin
       - name: Build release binary (Intel)
         run: cargo build -p moon-ui-gpui --bin moonterminal --release --locked --target x86_64-apple-darwin
-      - name: Stage the Intel slice
-        run: mv target/x86_64-apple-darwin/release/moonterminal stage/moonterminal-x86_64
+      - name: Stage the Intel slice and free the whole build tree
+        # Both slices now live in stage/, so nothing below needs target/ — and the fork build
+        # carries MORE on this 14 GB runner than upstream's release.yml does (cargo holds TWO
+        # MoonUI git mirrors: Moonbot-Tech and the patched fork). Without this sweep, hdiutil
+        # hits "No space left on device" at the very end (fork-dmg run #3).
+        run: |
+          mv target/x86_64-apple-darwin/release/moonterminal stage/moonterminal-x86_64
+          rm -rf target
       - name: Package .app + .dmg
         run: bash .github/scripts/make-dmg.sh
       - uses: actions/upload-artifact@v7
