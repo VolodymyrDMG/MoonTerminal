@@ -9,18 +9,18 @@ use gpui::*;
 use moon_ui::MoonVirtualListScrollHandle;
 
 use super::stack::{
-    COMPACT_STABLE, ChartStackEntry, apply_setting, chart_stack_card, compare_role,
-    render_chart_stack, resolve_layout, set_panels_action_btn_pos, set_panels_auto_pin,
-    set_panels_candle_view, set_panels_cursor_labels, set_panels_line_labels,
-    set_panels_liquidations, set_panels_orderbook_enabled, set_panels_price_axis_pos,
-    set_panels_scale, set_panels_show_zone, set_panels_time_axis_visible, sync_compare,
-    tile_gutter,
+    apply_setting, chart_stack_card, compare_role, render_chart_stack, resolve_layout,
+    set_panels_action_btn_pos, set_panels_auto_pin, set_panels_candle_view,
+    set_panels_cursor_labels, set_panels_line_labels, set_panels_liquidations,
+    set_panels_orderbook_enabled, set_panels_price_axis_pos, set_panels_scale,
+    set_panels_show_zone, set_panels_time_axis_visible, sync_compare, tile_gutter, ChartStackEntry,
+    COMPACT_STABLE,
 };
-use crate::Backend;
 use crate::panels::ChartPanel;
 use crate::persistence::chart_persist::{
     ChartBtnPos, PriceAxisPos, StackLayoutMode, StackOrientation,
 };
+use crate::Backend;
 use moon_core::config::{ChartBucket, ChartTheme};
 use moon_core::session::CoreId;
 
@@ -385,8 +385,8 @@ impl AddChartStack {
         self.touch_count_change(); // A new chart appeared; reset the debounce interval.
         self.arm_compact_timer(cx); // Start the compaction timer if it is not already armed.
         self.flash_arrival(self.charts.len() - 1, cx); // Flash the border on the new slot.
-        // In comparison mode, a new ticker immediately receives eligibility and the anchor's
-        // shared Y window.
+                                                       // In comparison mode, a new ticker immediately receives eligibility and the anchor's
+                                                       // shared Y window.
         self.sync_compare(cx);
         cx.notify();
     }

@@ -414,9 +414,9 @@ chart.arb.frame_view:
   en: "Display"
   es: "Visualización"
 chart.arb.lines:
-  ru: "Линии цен на графике"
-  en: "Price lines on the chart"
-  es: "Líneas de precio en el gráfico"
+  ru: "Трасса цены на графике"
+  en: "Price trace on the chart"
+  es: "Traza de precio en el gráfico"
 chart.arb.numbers:
   ru: "Легенда с цифрами"
   en: "Legend with figures"

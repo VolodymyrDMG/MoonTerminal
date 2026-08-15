@@ -10,13 +10,13 @@
 
 use gpui::*;
 use moon_core::market::candles::{
-    CANDLE_MODE_FILLED, CANDLE_MODE_OFF, CANDLE_MODE_OUTLINE, CANDLE_MODE_OUTLINE_IN_ZONE,
-    CandleViewCfg,
+    CandleViewCfg, CANDLE_MODE_FILLED, CANDLE_MODE_OFF, CANDLE_MODE_OUTLINE,
+    CANDLE_MODE_OUTLINE_IN_ZONE,
 };
 use moon_ui::{
-    MoonAccent, MoonButton, MoonButtonSize, MoonButtonVariant, MoonCheckbox, MoonCheckboxSize,
-    MoonPalette, MoonPopover, MoonPopoverPlacement, MoonSegmentItem, MoonSegmentedControl, h_flex,
-    v_flex,
+    h_flex, v_flex, MoonAccent, MoonButton, MoonButtonSize, MoonButtonVariant, MoonCheckbox,
+    MoonCheckboxSize, MoonPalette, MoonPopover, MoonPopoverPlacement, MoonSegmentItem,
+    MoonSegmentedControl,
 };
 use rust_i18n::t;
 

@@ -7,7 +7,7 @@ use gpui::*;
 use moon_ui::{MoonBackgroundPolicy, Root};
 
 use super::detached_host::DetachedChartHost;
-use super::{AddChartStack, ChartTabs, Tab, chart_pane_label, coin_search};
+use super::{chart_pane_label, coin_search, AddChartStack, ChartTabs, Tab};
 use crate::persistence::chart_persist::{self, StackLayoutMode, StackOrientation};
 use moon_core::config::{ChartBucket, WorkspaceMode};
 use moon_core::session::CoreId;

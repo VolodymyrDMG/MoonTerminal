@@ -3,53 +3,58 @@
 //! The core relays other-exchange prices only for the platforms enabled in the BOT's arbitrage
 //! panel (and only while its arbitrage license is active); moonproto has already applied them to
 //! retained market state by the time this module runs. Collection is therefore a read-only
-//! sweep: probe every known platform slot on every market handle and keep what exists. The
-//! platform table below is the protocol's fixed code space with the BOT's display spellings
-//! ("BybitF", "GateS", …), so the terminal legend reads like the bot's. HIP-3 deployer slots
-//! (codes 50+) have no name channel in the relay yet and are labeled "HL#n".
+//! sweep — and it probes the WHOLE code byte space, not just the names this build knows: the
+//! bot grows new platforms (OkxS arrived under a code moonproto's table had not named yet), and
+//! a slot with data must reach the screen even when all we can print is "P104". Known codes get
+//! the bot's display spellings ("BybitF", "GateS", …); HIP-3 deployer slots are "HL#n".
 
 use moonproto::{ArbPlatformCode, MarketArbSlot, MoonStateSnapshot};
 
 use crate::feed::types::ArbQuote;
 
-/// Fixed platform code space with bot-style display names; the byte mirrors the protocol code so
-/// consumers can match a quote to a connected core's venue without moonproto types.
-const PLATFORMS: &[(ArbPlatformCode, &str, u8)] = &[
-    (ArbPlatformCode::FBybit, "BybitF", 2),
-    (ArbPlatformCode::Binance, "BinanceS", 3),
-    (ArbPlatformCode::FBinance, "BinanceF", 4),
-    (ArbPlatformCode::Huobi, "HtxS", 5),
-    (ArbPlatformCode::QBinance, "BinanceQ", 6),
-    (ArbPlatformCode::ByBit, "BybitS", 7),
-    (ArbPlatformCode::Gate, "GateS", 8),
-    (ArbPlatformCode::FGate, "GateF", 9),
-    (ArbPlatformCode::BitGet, "BitgetS", 10),
-    (ArbPlatformCode::FBitGet, "BitgetF", 11),
-    (ArbPlatformCode::HyperSpot, "HL_S", 12),
-    (ArbPlatformCode::HyperFutures, "HL_F", 13),
-    (ArbPlatformCode::Forex, "Forex", 100),
-    (ArbPlatformCode::UpBit, "UpBit", 101),
-    (ArbPlatformCode::Okx, "OkxS", 102),
-    (ArbPlatformCode::BinAlpha, "BinAlpha", 103),
-];
+/// Display names for the codes this build knows, mirroring the bot's panel spellings.
+fn platform_name(byte: u8) -> String {
+    match byte {
+        2 => "BybitF".to_string(),
+        3 => "BinanceS".to_string(),
+        4 => "BinanceF".to_string(),
+        5 => "HtxS".to_string(),
+        6 => "BinanceQ".to_string(),
+        7 => "BybitS".to_string(),
+        8 => "GateS".to_string(),
+        9 => "GateF".to_string(),
+        10 => "BitgetS".to_string(),
+        11 => "BitgetF".to_string(),
+        12 => "HL_S".to_string(),
+        13 => "HL_F".to_string(),
+        50..=61 => format!("HL#{}", byte - 49),
+        100 => "Forex".to_string(),
+        101 => "UpBit".to_string(),
+        102 => "OkxF".to_string(),
+        103 => "BinAlpha".to_string(),
+        104 => "OkxS".to_string(),
+        _ => format!("P{byte}"),
+    }
+}
 
-/// How many HIP-3 deployer slots to probe (codes 50..50+N). The bot UI currently shows four;
-/// twelve leaves headroom without turning the sweep into a scan of the whole byte space.
-const HL_DEPLOYER_SLOTS: u8 = 12;
+/// Highest platform code probed; the known table tops out at 104 and deployers at 61, so 139
+/// leaves generous headroom without scanning the whole byte space on every sweep.
+const MAX_PLATFORM_CODE: u8 = 139;
+
+/// Construct a platform code for ANY byte through the deployer constructor's wrapping offset —
+/// the only public byte-taking constructor moonproto exposes.
+fn code_of(byte: u8) -> ArbPlatformCode {
+    ArbPlatformCode::hyper_deployer(byte.wrapping_sub(ArbPlatformCode::HL_DEX_BASE))
+}
 
 /// Sweep every market's arb slots into `(market, quotes)` rows; markets without data are absent.
 pub(super) fn collect_arb(snap: &MoonStateSnapshot) -> Vec<(String, Vec<ArbQuote>)> {
     let mut out = Vec::new();
     for handle in snap.markets().iter() {
         let mut quotes: Vec<ArbQuote> = Vec::new();
-        for (code, name, byte) in PLATFORMS {
-            if let Some(slot) = handle.arb_slot(*code) {
-                push_quote(&mut quotes, name, *byte, &slot);
-            }
-        }
-        for i in 0..HL_DEPLOYER_SLOTS {
-            if let Some(slot) = handle.arb_slot(ArbPlatformCode::hyper_deployer(i)) {
-                push_quote(&mut quotes, &format!("HL#{}", i + 1), 50 + i, &slot);
+        for byte in 1..=MAX_PLATFORM_CODE {
+            if let Some(slot) = handle.arb_slot(code_of(byte)) {
+                push_quote(&mut quotes, byte, &slot);
             }
         }
         if !quotes.is_empty() {
@@ -60,7 +65,7 @@ pub(super) fn collect_arb(snap: &MoonStateSnapshot) -> Vec<(String, Vec<ArbQuote
 }
 
 /// Convert one slot into a quote, skipping slots that never received a price.
-fn push_quote(quotes: &mut Vec<ArbQuote>, name: &str, byte: u8, slot: &MarketArbSlot) {
+fn push_quote(quotes: &mut Vec<ArbQuote>, byte: u8, slot: &MarketArbSlot) {
     if !(slot.now.price > 0.0) {
         return;
     }
@@ -73,7 +78,7 @@ fn push_quote(quotes: &mut Vec<ArbQuote>, name: &str, byte: u8, slot: &MarketArb
         .collect();
     quotes.push(ArbQuote {
         platform: byte,
-        platform_name: name.to_string(),
+        platform_name: platform_name(byte),
         price: slot.now.price,
         time_ms: slot.now.unix_millis().unwrap_or(0),
         my_price: latest.my_price,

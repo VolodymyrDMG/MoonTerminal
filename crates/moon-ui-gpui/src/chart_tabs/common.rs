@@ -11,10 +11,10 @@ use gpui::*;
 use moon_ui::{MoonInputState, MoonPalette, MoonPopover, MoonPopoverPlacement};
 
 use super::{layout_popup, stack};
-use crate::Backend;
 use crate::persistence::chart_persist::{
     self, ChartBtnPos, PriceAxisPos, StackLayoutMode, StackOrientation,
 };
+use crate::Backend;
 use moon_core::config::ChartBucket;
 use moon_core::session::CoreId;
 

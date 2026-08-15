@@ -6,10 +6,10 @@
 
 use gpui::*;
 
-use super::common::{LayoutPopupHost, LayoutPopupSnapshot, StackSetting, set_stack_setting};
+use super::common::{set_stack_setting, LayoutPopupHost, LayoutPopupSnapshot, StackSetting};
 use super::{AddChartStack, ChartTabs, Tab};
-use crate::Backend;
 use crate::persistence::chart_persist::{ChartBtnPos, StackLayoutMode, StackOrientation};
+use crate::Backend;
 use moon_core::config::ChartBucket;
 use moon_ui::MoonInputState;
 

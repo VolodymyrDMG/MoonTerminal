@@ -270,6 +270,9 @@ impl OpenMainRequest {
 pub(crate) struct OpenCompareRequest {
     target: (CoreId, String),
     authority_group: Option<String>,
+    /// `true` opens ONE chart in the new tab instead of seeding group-wide comparison — the
+    /// arbitrage legend's "open the coin on THAT exchange" click.
+    single: bool,
 }
 
 impl OpenCompareRequest {
@@ -285,6 +288,7 @@ impl OpenCompareRequest {
         Self {
             target,
             authority_group,
+            single: false,
         }
     }
 
@@ -1528,6 +1532,30 @@ impl Backend {
         true
     }
 
+    /// Queue one SINGLE-chart tab navigation — the same authority and drain path as comparison,
+    /// but the consumer opens only the captured market, like a one-coin "Open in new tab".
+    ///
+    /// Args:
+    ///     group: Group that owned the rendered callback, or `None` for an unscoped host.
+    ///     target: Captured core and market to open alone.
+    ///
+    /// Returns:
+    ///     `true` when the current authority accepted and published the request.
+    pub(crate) fn open_single_tab_if_authorized(
+        &mut self,
+        group: Option<&str>,
+        target: (CoreId, String),
+    ) -> bool {
+        if !self.workspace_action_allows_core(group, target.0) {
+            return false;
+        }
+        let mut request = OpenCompareRequest::new(target, group.map(str::to_string));
+        request.single = true;
+        self.open_compare_request = Some(request);
+        self.open_compare_request_rev = self.open_compare_request_rev.wrapping_add(1);
+        true
+    }
+
     /// Revalidate and drain one comparison request only for its live authorized group.
     ///
     /// Args:
@@ -1539,7 +1567,7 @@ impl Backend {
     pub(crate) fn take_open_compare_request_for_group(
         &mut self,
         group: &str,
-    ) -> Option<(CoreId, String)> {
+    ) -> Option<(CoreId, String, bool)> {
         let request = self.open_compare_request.as_ref()?;
         let (core, _) = &request.target;
         let live_group = self
@@ -1560,7 +1588,7 @@ impl Backend {
         }
         self.open_compare_request
             .take()
-            .map(|request| request.target)
+            .map(|request| (request.target.0, request.target.1, request.single))
     }
 
     /// Return the comparison revision only to the request's current authorized group.

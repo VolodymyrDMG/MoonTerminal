@@ -44,8 +44,8 @@ use moon_ui::{
 };
 use rust_i18n::t;
 
-use crate::Backend;
 use crate::persistence::chart_persist;
+use crate::Backend;
 use moon_core::config::{ChartBucket, ChartTheme, WorkspaceMode};
 use moon_core::market::MarketLabel;
 use moon_core::session::CoreId;
@@ -865,8 +865,14 @@ impl ChartTabs {
         let req = self.backend.update(cx, |b, _| {
             b.take_open_compare_request_for_group(self.group.as_str())
         });
-        if let Some((core, market)) = req {
-            self.open_compare_tab(core, market, cx);
+        if let Some((core, market, single)) = req {
+            if single {
+                // The arbitrage legend's venue click: ONE chart of that exact market, like a
+                // one-coin "Open in new tab", never group-wide comparison seeding.
+                self.open_pairs_in_new_tab(vec![(core, market)], cx);
+            } else {
+                self.open_compare_tab(core, market, cx);
+            }
             self.last_sig = chart_tabs_sig(self.backend.read(cx), self.group.as_str());
         }
     }

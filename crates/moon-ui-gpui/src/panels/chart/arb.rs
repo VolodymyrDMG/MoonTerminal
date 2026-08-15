@@ -225,7 +225,7 @@ impl ChartPanel {
             let Some((market, _)) = cands.into_iter().next() else {
                 return false;
             };
-            let authorized = b.open_compare_if_authorized(Some(&group), (target, market));
+            let authorized = b.open_single_tab_if_authorized(Some(&group), (target, market));
             if authorized {
                 bcx.notify();
             }
