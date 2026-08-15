@@ -9,6 +9,7 @@
 //! `DetachedChartHost`, lives in [`windows`].
 
 mod add_stack;
+mod arb_popup;
 mod candle_popup;
 mod graphics_popup;
 // `pub(crate)` because the header price ticker reuses `search` and `render_popup`.
@@ -329,6 +330,8 @@ pub struct ChartTabs {
     candle_popup_open: bool,
     /// Anchored Chart graphics popup for the global chart-drawing settings.
     graphics_popup_open: bool,
+    /// Anchored global arbitrage-overlay settings popup.
+    arb_popup_open: bool,
     /// Fit-mode height field.
     layout_fit_input: Entity<MoonInputState>,
     /// Scroll-mode height field.
@@ -708,6 +711,7 @@ impl ChartTabs {
             layout_popup_open: false,
             candle_popup_open: false,
             graphics_popup_open: false,
+            arb_popup_open: false,
             layout_fit_input,
             layout_scroll_input,
             custom_name_input,

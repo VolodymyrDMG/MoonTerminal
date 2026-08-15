@@ -513,6 +513,54 @@ chart.candles.tip:
   ru: "Настройки свечей и сделок (общее для всех чартов)"
   en: "Candles and trades settings (global for all charts)"
   es: "Ajustes de velas y operaciones (global)"
+chart.arb.tip:
+  ru: "Арбитраж: цены монеты на других биржах (общее для всех чартов)"
+  en: "Arbitrage: this coin's prices on other exchanges (global)"
+  es: "Arbitraje: precios de la moneda en otros exchanges (global)"
+chart.arb.title:
+  ru: "Арбитраж"
+  en: "Arbitrage"
+  es: "Arbitraje"
+chart.arb.enabled:
+  ru: "Показывать арбитраж на графиках"
+  en: "Show arbitrage on charts"
+  es: "Mostrar arbitraje en los gráficos"
+chart.arb.frame_view:
+  ru: "Отображение"
+  en: "Display"
+  es: "Visualización"
+chart.arb.lines:
+  ru: "Линии цен на графике"
+  en: "Price lines on the chart"
+  es: "Líneas de precio en el gráfico"
+chart.arb.numbers:
+  ru: "Легенда с цифрами"
+  en: "Legend with figures"
+  es: "Leyenda con cifras"
+chart.arb.percent:
+  ru: "Спред в процентах"
+  en: "Spread in percent"
+  es: "Spread en porcentaje"
+chart.arb.prices:
+  ru: "Абсолютные цены"
+  en: "Absolute prices"
+  es: "Precios absolutos"
+chart.arb.right:
+  ru: "Легенда справа"
+  en: "Legend on the right"
+  es: "Leyenda a la derecha"
+chart.arb.frame_platforms:
+  ru: "Биржи"
+  en: "Exchanges"
+  es: "Exchanges"
+chart.arb.color_tip:
+  ru: "Клик — следующий цвет"
+  en: "Click — next color"
+  es: "Clic — siguiente color"
+chart.arb.empty_hint:
+  ru: "Пока пусто: ядро ещё не прислало арбитражные цены. Проверь, что в мунботе включён арбитраж и отмечены площадки."
+  en: "Empty so far: the core has not relayed arbitrage prices yet. Check that arbitrage is enabled in Moonbot with platforms ticked."
+  es: "Vacío por ahora: el núcleo aún no ha enviado precios de arbitraje. Comprueba que el arbitraje esté activado en Moonbot con plataformas marcadas."
 chart.candles.frame_candles:
   ru: "Свечи"
   en: "Candles"

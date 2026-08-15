@@ -441,6 +441,11 @@ pub fn detects_view_path() -> PathBuf {
     cfg_dir().join("detects_view.toml")
 }
 
+/// Arbitrage overlay settings (portable, global — the relay is core-side, the view is one).
+pub fn arb_view_path() -> PathBuf {
+    cfg_dir().join("arb_view.toml")
+}
+
 /// Hotkeys and mouse gestures in a separate portable file that can be shared. Before schema v13,
 /// they lived in a settings.toml section and are migrated once during load.
 pub fn hotkeys_path() -> PathBuf {
