@@ -2,8 +2,8 @@
 
 // NOT `use super::*`: the parent imports `gpui::*`, whose `test` macro shadows `#[test]`.
 use super::{
-    AutoWorkspaceChartState, Tab, coin_search_bucket, preferred_auto_workspace_market,
-    prune_coin_selection_to_scope, windows::chart_detach_allowed,
+    coin_search_bucket, preferred_auto_workspace_market, prune_coin_selection_to_scope,
+    windows::chart_detach_allowed, AutoWorkspaceChartState, Tab,
 };
 use moon_core::config::{ChartBucket, WorkspaceMode};
 use moon_core::market::MarketLabel;
@@ -232,7 +232,10 @@ fn prune_coin_selection_drops_markets_outside_the_new_scope() {
 
     let pruned = prune_coin_selection_to_scope(&mut selected, Some(7));
 
-    assert!(pruned, "a selection spanning more than the new scope must report a change");
+    assert!(
+        pruned,
+        "a selection spanning more than the new scope must report a change"
+    );
     assert_eq!(
         selected,
         HashSet::from([(7, "BTCUSDT".to_string()), (7, "ETHUSDT".to_string())])

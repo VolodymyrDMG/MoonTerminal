@@ -8,22 +8,21 @@ use std::time::{Duration, Instant};
 
 use gpui::*;
 use moon_ui::{
-    MoonPalette, MoonRect, MoonTabItem, MoonTabStrip, MoonVirtualListScrollHandle, v_flex,
+    v_flex, MoonPalette, MoonRect, MoonTabItem, MoonTabStrip, MoonVirtualListScrollHandle,
 };
 
 use super::stack::{
-    ChartStackEntry, apply_setting, chart_stack_card, compare_role, render_chart_stack,
-    resolve_layout, retain_nonempty_panels, set_panels_action_btn_pos, set_panels_auto_pin,
-    set_panels_candle_view, set_panels_cursor_labels, set_panels_line_labels,
-    set_panels_liquidations, set_panels_orderbook_enabled, set_panels_price_axis_pos,
-    set_panels_scale, set_panels_show_zone, set_panels_time_axis_visible, sync_compare,
-    tile_gutter,
+    apply_setting, chart_stack_card, compare_role, render_chart_stack, resolve_layout,
+    retain_nonempty_panels, set_panels_action_btn_pos, set_panels_auto_pin, set_panels_candle_view,
+    set_panels_cursor_labels, set_panels_line_labels, set_panels_liquidations,
+    set_panels_orderbook_enabled, set_panels_price_axis_pos, set_panels_scale,
+    set_panels_show_zone, set_panels_time_axis_visible, sync_compare, tile_gutter, ChartStackEntry,
 };
-use crate::Backend;
 use crate::panels::ChartPanel;
 use crate::persistence::chart_persist::{
     ChartBtnPos, PriceAxisPos, StackLayoutMode, StackOrientation,
 };
+use crate::Backend;
 use moon_core::config::ChartTheme;
 use moon_core::session::CoreId;
 

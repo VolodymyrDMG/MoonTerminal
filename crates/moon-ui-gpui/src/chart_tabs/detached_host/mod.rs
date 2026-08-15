@@ -10,11 +10,11 @@ use rust_i18n::t;
 use std::time::Duration;
 
 use super::common::{
-    CoinPopupHost, LayoutPopupHost, LayoutPopupSnapshot, StackSetting, set_stack_setting,
+    set_stack_setting, CoinPopupHost, LayoutPopupHost, LayoutPopupSnapshot, StackSetting,
 };
-use super::{AddChartStack, chart_pane_label, coin_search};
-use crate::Backend;
+use super::{chart_pane_label, coin_search, AddChartStack};
 use crate::persistence::chart_persist::{self, StackLayoutMode, StackOrientation};
+use crate::Backend;
 use moon_core::config::ChartBucket;
 use moon_core::session::CoreId;
 
@@ -503,7 +503,7 @@ impl DetachedChartHost {
     /// Mirrors `ChartTabs::coin_results`, scoped to this window's own bucket. The empty-field
     /// branch reads only the cached suggestions; the scan filling that cache runs on open.
     fn coin_results(&self, cx: &App) -> crate::controls::coin_search::CoinResults {
-        use crate::controls::coin_search::{CoinResults, suggestions};
+        use crate::controls::coin_search::{suggestions, CoinResults};
 
         let b = self.backend.read(cx);
         if !self.coin_query.trim().is_empty() {

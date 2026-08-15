@@ -8,8 +8,9 @@
 
 use gpui::*;
 use moon_ui::{
-    MoonAccent, MoonButton, MoonButtonSize, MoonButtonVariant, MoonCheckbox, MoonCheckboxSize,
-    MoonInput, MoonInputState, MoonPalette, MoonSegmentItem, MoonSegmentedControl, h_flex, v_flex,
+    h_flex, v_flex, MoonAccent, MoonButton, MoonButtonSize, MoonButtonVariant, MoonCheckbox,
+    MoonCheckboxSize, MoonInput, MoonInputState, MoonPalette, MoonSegmentItem,
+    MoonSegmentedControl,
 };
 use rust_i18n::t;
 

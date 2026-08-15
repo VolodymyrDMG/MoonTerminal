@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use moon_ui::{
-    MoonPalette, MoonScrollableElement, MoonScrollbarVisibility, MoonVirtualList,
-    MoonVirtualListScrollHandle, h_flex, v_flex,
+    h_flex, v_flex, MoonPalette, MoonScrollableElement, MoonScrollbarVisibility, MoonVirtualList,
+    MoonVirtualListScrollHandle,
 };
 
 use crate::panels::ChartPanel;
