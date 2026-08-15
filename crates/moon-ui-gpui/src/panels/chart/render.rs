@@ -108,7 +108,7 @@ impl Render for ChartPanel {
         // IMPORTANT: there is no request_animation_frame or continuous present. `gpu_canvas.frame()`
         // decides whether to present on the platform tick without dirtying the GPUI tree, and
         // `draw()` renders during that same tick.
-        let (theme, orders_style, follow, prospective_usd, candle_view) = {
+        let (theme, orders_style, arb_view, follow, prospective_usd, candle_view) = {
             let b = self.backend.read(cx);
             let eff = b.preview.as_ref().unwrap_or(&b.config);
             // Prospective F1-F6 order size in dollars for the active coin's crosshair label.
@@ -123,12 +123,20 @@ impl Render for ChartPanel {
             let theme = eff.theme.get(palette.is_light()).clone();
             // Candles use the panel's per-tab override or the global layout default.
             let candle_view = self.candle_view.unwrap_or(b.layout.candle_view);
-            (theme, orders, b.follow, prospective, candle_view)
+            (
+                theme,
+                orders,
+                b.arb_view.view.clone(),
+                b.follow,
+                prospective,
+                candle_view,
+            )
         };
         // Scale is PER TAB: use self.scale, updated through set_scale by the active-tab toolbar or
         // detached-window header, rather than the global backend.price_scale.
         let mut settings_changed = self.chart.set_theme(theme)
             | self.chart.set_orders(orders_style)
+            | self.chart.set_arb_view(arb_view)
             | self.chart.set_scale(self.scale)
             | self.chart.set_orderbook_enabled(self.orderbook_enabled)
             | self
@@ -259,6 +267,48 @@ impl Render for ChartPanel {
         } else {
             Vec::new()
         };
+        // Arbitrage legend per pane: rows resolve from the store at render time (cheap map reads);
+        // exact market resolution for a click happens lazily in the handler. The block anchors at
+        // the plot's top-left below the pin row, or at the pane's right edge under the close
+        // button when the config asks for the right side.
+        let arb_cfg = self.backend.read(cx).arb_view.view.clone();
+        let arb_legends: Vec<(
+            moon_core::session::CoreId,
+            String,
+            Vec<super::arb::ArbLegendRow>,
+            f32,
+            f32,
+            f32,
+        )> =
+            if arb_cfg.enabled && arb_cfg.numbers {
+                let b = self.backend.read(cx);
+                axis_panes
+                    .iter()
+                    .filter_map(|(idx, rect, _)| {
+                        let (core, market) = self.chart.pane_target(*idx)?;
+                        let rows = super::arb::legend_rows(
+                            &b,
+                            core,
+                            &market,
+                            &arb_cfg,
+                            self.workspace_group.as_deref().unwrap_or(""),
+                        );
+                        (!rows.is_empty()).then(|| {
+                            (
+                                core,
+                                market,
+                                rows,
+                                rect.x / ppp + axis_off + 4.0,
+                                (rect.x + rect.w) / ppp,
+                                rect.y / ppp + 24.0,
+                            )
+                        })
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+        let arb_anchor_right = arb_cfg.right;
         // Render Cancel Buy / Panic Sell as a GPUI overlay at the bottom of the graph body, ABOVE
         // the time-axis row. OverScene axis text renders above GPUI, so avoid its area. Each tab's
         // setting chooses Hide/Left/Center/Right. Keep buttons strictly inside the chart zone:
@@ -635,6 +685,21 @@ impl Render for ChartPanel {
             }))
             // News-mark card: above the chart, below every chart control (close/pin/lock/broom and
             // the action buttons), so it can never swallow a trading click's target.
+            .children(arb_legends.into_iter().map(
+                |(core, market, rows, left, right, top)| {
+                    super::arb::legend_element(
+                        cx.entity(),
+                        (core, market),
+                        rows,
+                        left,
+                        right,
+                        top,
+                        arb_anchor_right,
+                        palette,
+                        cx,
+                    )
+                },
+            ))
             .children(news_card)
             .children(warn_card)
             .children(close_btns.into_iter().map(|(idx, right, top)| {

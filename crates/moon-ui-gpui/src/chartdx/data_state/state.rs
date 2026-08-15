@@ -13,6 +13,7 @@ impl ChartDataState {
             render,
             theme,
             orders: OrdersStyle::default(),
+            arb_view: moon_core::config::ArbViewCfg::default(),
             follow: true,
             present_rate_hz: 60.0,
             w: 1024,

@@ -199,6 +199,9 @@ struct Backend {
     /// Per-group detect-strip presentation: dimensions, chart, rail, and size slots.
     /// Stored in the portable `detects_view.toml` and saved immediately because the file is small.
     detects_view: moon_core::config::DetectViewFile,
+    /// Arbitrage overlay preferences (master switch, flags, per-platform enable + color).
+    /// Stored in the portable `arb_view.toml` and saved immediately on change.
+    arb_view: moon_core::config::ArbViewFile,
     /// Global News-panel tag settings: per-tag colours + the tag-visibility filter. Stored in the
     /// small portable `news_tags.json` and saved immediately on change.
     news_tag_settings: moon_core::config::NewsTagSettings,

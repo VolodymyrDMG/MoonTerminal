@@ -329,6 +329,8 @@ struct PaneRender {
     last_book_hi: f32,
     /// Last order revision uploaded into the userdata buffer.
     last_order_lines_rev: u64,
+    /// Last arbitrage-relay revision folded into the userdata hlines.
+    last_arb_rev: u64,
     /// Last order-zone signature. Zones live in the base cache, drawn over the grid and under the
     /// candles, while lines and traces render as an overlay. Zone changes must invalidate base;
     /// line hover and drag must not.
@@ -475,6 +477,7 @@ impl PaneRender {
             last_book_lo: f32::NAN,
             last_book_hi: f32::NAN,
             last_order_lines_rev: u64::MAX,
+            last_arb_rev: u64::MAX,
             last_order_zone_sig: 0,
             last_order_lines_sync_ms: 0.0,
             pending_order_gpu_rev: None,
@@ -755,6 +758,8 @@ struct ChartDataState {
     render: Rc<RefCell<RenderState>>,
     theme: ChartTheme,
     orders: OrdersStyle,
+    /// Arbitrage overlay preferences; lines join the userdata hline layer per pane.
+    arb_view: moon_core::config::ArbViewCfg,
     follow: bool,
     present_rate_hz: f32,
     w: u32,

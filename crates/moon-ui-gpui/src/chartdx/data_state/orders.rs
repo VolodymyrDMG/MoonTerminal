@@ -104,6 +104,7 @@ impl ChartDataState {
                 let figures_sig = self.figures_sig();
                 if force
                     || pr.last_order_lines_rev != core_st.order_lines_rev
+                    || pr.last_arb_rev != core_st.arb_rev
                     || pr.last_order_highlight_uid != highlight_uid
                     || pr.last_order_drag_preview != drag_preview_sig
                     || pr.last_figures_sig != figures_sig
@@ -147,6 +148,9 @@ impl ChartDataState {
                             labels: &mut pr.figure_labels,
                         },
                     );
+                    // Arbitrage platform lines ride the hline layer after figures: thin dashed
+                    // levels at other-exchange prices, colored per platform from arb_view.
+                    append_arb_hlines(&self.arb_view, core_st, &pane.market, &mut hlines);
                     // News marks ride the same layer, last, so a mark is never hidden under an
                     // order line's cross.
                     self.append_news_geometry(pane.view.epoch_ms, &mut markers);
@@ -177,6 +181,7 @@ impl ChartDataState {
                         &pr.orderbook_levels,
                     );
                     pr.last_order_lines_rev = core_st.order_lines_rev;
+                    pr.last_arb_rev = core_st.arb_rev;
                     pr.last_order_lines_sync_ms = now;
                     pr.pending_order_gpu_rev = Some(core_st.order_lines_rev);
                     pr.last_order_highlight_uid = highlight_uid;
@@ -469,4 +474,44 @@ pub(super) fn refresh_orderbook_label_notionals(
 /// Formats a dollar amount with an SI suffix, for example 1234 as "$1.23K".
 fn fmt_usd(v: f64) -> String {
     format!("${}", fmt_size_2dp(v))
+}
+
+/// Push one thin dashed level per enabled arbitrage platform of this pane's market.
+///
+/// Colors come from `arb_view` (explicit entry or the deterministic palette), alpha slightly
+/// under one so a level crossing the candles reads as an overlay, not a chart line. Disabled
+/// master switch or `lines=false` contributes nothing — the legend can still show numbers.
+fn append_arb_hlines(
+    arb_view: &moon_core::config::ArbViewCfg,
+    core_st: &moon_core::session::store::CoreData,
+    market: &str,
+    hlines: &mut Vec<moon_chart::layers::LineInstance>,
+) {
+    if !arb_view.enabled || !arb_view.lines {
+        return;
+    }
+    let Some(quotes) = core_st.arb.get(market) else {
+        return;
+    };
+    for q in quotes {
+        if !(q.price > 0.0) {
+            continue;
+        }
+        let pv = arb_view.platform(&q.platform_name);
+        if !pv.on {
+            continue;
+        }
+        let [r, g, b] = pv.color;
+        hlines.push(moon_chart::layers::LineInstance {
+            price: q.price,
+            color: [
+                f32::from(r) / 255.0,
+                f32::from(g) / 255.0,
+                f32::from(b) / 255.0,
+                0.9,
+            ],
+            style: 1.0, // dashed: an external reference level, not one of our order lines
+            thickness: 1.0,
+        });
+    }
 }

@@ -385,6 +385,23 @@ impl ChartEngine {
         }
     }
 
+    /// Apply arbitrage overlay preferences; a change rebuilds every pane's userdata layers so
+    /// platform lines appear, recolor, or vanish without waiting for the next relay batch.
+    pub fn set_arb_view(&mut self, arb_view: moon_core::config::ArbViewCfg) -> bool {
+        let mut data = self.data.borrow_mut();
+        if data.arb_view != arb_view {
+            data.arb_view = arb_view;
+            data.mark_view_dirty();
+            drop(data);
+            for pr in &mut self.state.borrow_mut().panes {
+                pr.last_order_lines_rev = u64::MAX;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn set_orders(&mut self, orders: OrdersStyle) -> bool {
         if self.orders != orders {
             self.orders = orders;

@@ -8,6 +8,7 @@
 //! calculation in [`dirty`].
 
 mod account_reconciliation;
+mod arb;
 mod archive_probe;
 mod client_settings;
 mod commands;
@@ -302,6 +303,9 @@ pub(super) fn run(
 
     let mut identity_sent = false;
     let mut last_orders = Instant::now();
+    // Arbitrage relay republish gate: an Arb event arms it, the send below fires at most ~1 Hz.
+    let mut arb_pending = false;
+    let mut last_arb = Instant::now();
     let mut orders_table_pending = false;
     let mut last_strats = Instant::now();
     // Assets snapshot rate cap: minimum 1 s between publishes while the Assets view is active,
@@ -543,6 +547,11 @@ pub(super) fn run(
         events.clear();
         event_queue.drain_events_into(&mut events);
         let had_domain_event = !events.is_empty();
+        // The relay applies arb prices to retained market state before this loop sees the event,
+        // so the event itself is only an arming signal for the throttled republish below.
+        if events.iter().any(|ev| matches!(ev, Event::Arb(_))) {
+            arb_pending = true;
+        }
         // v4 delivers Stop/VStop changes as ordinary `OrderEvent::Updated` field
         // mutations rather than dedicated events, so `Updated` (already matched
         // below) covers them.
@@ -1269,6 +1278,21 @@ pub(super) fn run(
                         break;
                     }
                 } else if order_lines_due && tx.send(FeedMsg::OrderLines(order_rows)).is_err() {
+                    break;
+                }
+            }
+        }
+
+        // Other-exchange prices from the core's arbitrage relay: after an Arb event, sweep the
+        // retained market slots into plain rows at most about once a second. The sweep is
+        // read-only and sparse — markets without arb data produce nothing — and a full-map
+        // replace on the store side keeps stale platforms from lingering after the bot narrows
+        // its wanted set.
+        if arb_pending && last_arb.elapsed() >= Duration::from_secs(1) {
+            if let Some(snap) = client.snapshot() {
+                arb_pending = false;
+                last_arb = Instant::now();
+                if tx.send(FeedMsg::ArbQuotes(arb::collect_arb(&snap))).is_err() {
                     break;
                 }
             }
