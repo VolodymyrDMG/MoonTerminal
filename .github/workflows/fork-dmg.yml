@@ -60,7 +60,19 @@ jobs:
           mv target/x86_64-apple-darwin/release/moonterminal stage/moonterminal-x86_64
           rm -rf target
       - name: Package .app + .dmg
-        run: bash .github/scripts/make-dmg.sh
+        # v0.26's make-dmg.sh validates CFBundleVersion as strictly numeric X.Y[.Z] and takes it
+        # positionally; the bare fork tag ("0.26-move.24") now fails that check — run #6 died
+        # here with "refusing to bundle a non-numeric CFBundleVersion". Map vA.B[-.C]-move.N to
+        # A.B.N so the bundle version stays real and monotonic per move; anything else (e.g. a
+        # workflow_dispatch run on a branch) falls back to 0.0.0, same as upstream manual runs.
+        run: |
+          ref="${GITHUB_REF_NAME#v}"
+          if [[ "$ref" =~ ^([0-9]+)\.([0-9]+)(\.[0-9]+)?-move\.([0-9]+)$ ]]; then
+            ver="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[4]}"
+          else
+            ver="0.0.0"
+          fi
+          bash .github/scripts/make-dmg.sh "$ver"
       - uses: actions/upload-artifact@v7
         with:
           name: MoonTerminal-${{ github.run_number }}
