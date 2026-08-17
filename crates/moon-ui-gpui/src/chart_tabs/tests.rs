@@ -260,7 +260,7 @@ fn detect_auto_activation_is_gated_on_the_setting_and_skips_detached_windows() {
     // gated on the setting, and the coin lands on Main through panel reuse, not a new window.
     assert!(source.contains("&& det.open_chart"));
     assert!(source.contains("if auto_activate\n"));
-    assert!(source.contains("p.open_or_focus(core, market, pcx)"));
+    assert!(source.contains("p.open_or_focus("));
     // Activation must not raise the OS window: no activate_window call anywhere in ingest.
     assert!(!source.contains("activate_window"));
 }

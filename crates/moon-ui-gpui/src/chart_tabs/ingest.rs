@@ -97,8 +97,15 @@ impl ChartTabs {
         // before the AddToChart branch, so when one detect asks for both, the Add tab (which
         // also received the coin) ends up in front. The OS window is never raised.
         if let Some((_, core, market)) = open_main {
-            self.main
-                .update(cx, |p, pcx| p.open_or_focus(core, market, pcx));
+            self.main.update(cx, |p, pcx| {
+                // Default durable-history scope: a signal chart is a live open, not a Report row.
+                p.open_or_focus(
+                    core,
+                    market,
+                    crate::backend::ChartHistoryScope::Default,
+                    pcx,
+                );
+            });
             if self.active != Tab::Main {
                 self.active = Tab::Main;
                 self.sync_inactive_chart_visibility(cx);

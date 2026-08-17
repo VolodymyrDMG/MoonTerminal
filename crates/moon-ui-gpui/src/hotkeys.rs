@@ -626,6 +626,23 @@ pub(crate) fn sells_to_zone(b: &mut Backend, core: CoreId, market: &str, a: f64,
 /// That hands the selection to the core, and it does not draw the same line the chart's own drag
 /// does: a partially filled entry is still in its buy phase and moves here, while dragging its line
 /// refuses it. The core's phase is the authoritative answer, and matching Moonbot is the point.
+/// Whether one order's worker phase makes it a candidate for the bulk percent shift.
+///
+/// The buy side accepts `None` ALONGSIDE `BuySet`: a freshly placed limit buy sits in `None`
+/// until the core's worker advances it, and that window is exactly when a trader nudges the
+/// entry — the same pair the terminal's own cancel-buys gate accepts (`feed::trade`). The sell
+/// side accepts `SellAlmostDone` alongside `SellSet` because a partially filled sell's remainder
+/// is still a live movable order. Being slightly wider than the core's own gate is safe — the
+/// core reselects by its authoritative phase and silently moves nothing — while a narrower guard
+/// is how the shift keys read as dead.
+fn shift_phase_matches(sell: bool, status: &str) -> bool {
+    if sell {
+        matches!(status, "SellSet" | "SellAlmostDone")
+    } else {
+        matches!(status, "None" | "BuySet")
+    }
+}
+
 fn shift_orders(b: &mut Backend, core: CoreId, market: &str, sell: bool, up: bool) -> bool {
     // Local pre-check so the ways this press can do nothing — no order of that phase, a market this
     // core does not hold, a core that is not connected — are not all logged as a sent command;
@@ -635,16 +652,16 @@ fn shift_orders(b: &mut Backend, core: CoreId, market: &str, sell: bool, up: boo
     // lifecycle phase — rather than inferring one from the lines. A Buy line exists for an order's
     // whole life, including long after the entry filled, so "the line is there" would answer yes on
     // every market that ever bought.
-    let phase = if sell { "SellSet" } else { "BuySet" };
     let has_phase = b.session.store().core(core).is_some_and(|data| {
         data.orders
             .iter()
-            .any(|order| order.market == market && order.status == phase)
+            .any(|order| order.market == market && shift_phase_matches(sell, &order.status))
     });
     if !has_phase {
         log::warn!(
-            "hotkey shift orders: core={} market={market} has no order in {phase}, nothing sent",
+            "hotkey shift orders: core={} market={market} has no order in the {} phase, nothing sent",
             moon_core::feed::core_label(core),
+            if sell { "sell" } else { "buy" },
         );
         return false;
     }
