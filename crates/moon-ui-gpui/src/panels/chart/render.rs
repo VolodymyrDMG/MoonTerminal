@@ -144,7 +144,16 @@ impl Render for ChartPanel {
         // IMPORTANT: there is no request_animation_frame or continuous present. `gpu_canvas.frame()`
         // decides whether to present on the platform tick without dirtying the GPUI tree, and
         // `draw()` renders during that same tick.
-        let (theme, orders_style, arb_view, follow, prospective_usd, candle_view, chart_graphics) = {
+        let (
+            theme,
+            orders_style,
+            arb_view,
+            vol_view,
+            follow,
+            prospective_usd,
+            candle_view,
+            chart_graphics,
+        ) = {
             let b = self.backend.read(cx);
             let eff = b.preview.as_ref().unwrap_or(&b.config);
             // Prospective F1-F6 order size in dollars for the active coin's crosshair label.
@@ -164,6 +173,7 @@ impl Render for ChartPanel {
                 theme,
                 orders,
                 b.arb_view.view.clone(),
+                b.vol_view.view,
                 b.follow,
                 prospective,
                 candle_view,
@@ -178,6 +188,7 @@ impl Render for ChartPanel {
         let mut settings_changed = self.chart.set_theme(theme)
             | self.chart.set_orders(orders_style)
             | self.chart.set_arb_view(arb_view)
+            | self.chart.set_vol_view(vol_view)
             | self.chart.set_scale(self.scale)
             | self.chart.set_orderbook_enabled(self.orderbook_enabled)
             | self
@@ -351,6 +362,24 @@ impl Render for ChartPanel {
                 Vec::new()
             };
         let arb_anchor_right = arb_cfg.right;
+        // Header readout data per pane: Bv/Sv from the engine's tick tape, 24h from the market's
+        // delta state, Ses from the core's profit counters. Placed right of the corner controls;
+        // when the arb legend is on the left, it starts at top+24 and this row stays above it.
+        let vol_window = vol_view.window_secs_clamped();
+        let vol_headers: Vec<super::vol_header::VolHeader> = {
+            let b = self.backend.read(cx);
+            axis_panes
+                .iter()
+                .filter_map(|(idx, rect, _)| {
+                    let (core, market) = self.chart.pane_target(*idx)?;
+                    let mut h = self.vol_header_data(&b, *idx, core, &market, vol_window);
+                    h.left = rect.x / ppp + axis_off + 44.0;
+                    h.top = rect.y / ppp + 2.0;
+                    h.right = (rect.x + rect.w) / ppp;
+                    Some(h)
+                })
+                .collect()
+        };
         // Render Cancel Buy / Panic Sell as a GPUI overlay at the bottom of the graph body, ABOVE
         // the time-axis row. OverScene axis text renders above GPUI, so avoid its area. Each tab's
         // setting chooses Hide/Left/Center/Right. Keep buttons strictly inside the chart zone:
@@ -854,6 +883,18 @@ impl Render for ChartPanel {
                     )
                 },
             ))
+            // Bot-style header readouts (Bv/Sv window block, 24h delta, session profit) per pane.
+            .children(vol_headers.into_iter().map(|h| {
+                let menu_open = self.vol_menu_pane == Some(h.pane);
+                super::vol_header::header_element(
+                    cx.entity(),
+                    h,
+                    vol_window,
+                    menu_open,
+                    palette,
+                    cx,
+                )
+            }))
             .children(news_card)
             .children(warn_card)
             .children(trade_card)

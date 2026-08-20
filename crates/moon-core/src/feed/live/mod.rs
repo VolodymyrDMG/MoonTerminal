@@ -887,6 +887,26 @@ pub(super) fn run(
                 break;
             }
         }
+        // Report/profit counters (the bot's "Ses" figure). Same idiom: read the retained
+        // snapshot only when its update event arrives.
+        let profit_state = settings_event_snapshot(
+            &events,
+            &client,
+            |ev| matches!(ev, &Event::Settings(SettingsEvent::ProfitStateUpdated)),
+            |state| {
+                state.settings().profit_state.map(|p| crate::feed::ProfitState {
+                    session_profit: p.rep_total_profit,
+                    session_trades: p.rep_total_trades,
+                    traded_volume: p.rep_trades_total,
+                    counted_trades: p.rep_count_trades,
+                })
+            },
+        );
+        if let Some(profit) = profit_state {
+            if tx.send(FeedMsg::ProfitState(profit)).is_err() {
+                break;
+            }
+        }
         // Core resource telemetry (protocol v4 `Event::KernelHealth`). Read from the
         // RETAINED snapshot (`kernel_health()`), not the event payload, matching the
         // license/settings idiom above: the retained value keeps the last memory sample

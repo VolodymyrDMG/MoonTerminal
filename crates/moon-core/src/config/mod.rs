@@ -20,6 +20,7 @@ pub mod badges;
 pub mod core_groups;
 pub mod crypto;
 pub mod arb_view;
+pub mod vol_view;
 pub mod detect_view;
 pub mod groups;
 pub mod hotkeys;
@@ -48,6 +49,7 @@ mod uid_counter;
 mod tests;
 
 pub use arb_view::{arb_default_color, ArbPlatformView, ArbViewCfg, ArbViewFile};
+pub use vol_view::{VolViewCfg, VolViewFile, VOL_HEIGHT_L, VOL_HEIGHT_M, VOL_HEIGHT_S};
 pub use badges::{BadgeEntry, BadgesConfig};
 pub use core_groups::{
     move_group, sanitize_core_groups, unique_group_name, CoreGroup, CORE_GROUPS_MAX,

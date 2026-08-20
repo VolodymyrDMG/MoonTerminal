@@ -501,6 +501,26 @@ chart.graphics.global_hint:
   ru: "Настройки общие для всех чартов и окон"
   en: "These settings are shared by every chart and window"
   es: "Estos ajustes son comunes a todos los charts y ventanas"
+chart.vol.title:
+  ru: "Объёмы"
+  en: "Volumes"
+  es: "Volúmenes"
+chart.vol.enabled:
+  ru: "Зона объёмов внизу графика"
+  en: "Volume zone at the chart bottom"
+  es: "Zona de volumen abajo del gráfico"
+chart.vol.height:
+  ru: "Высота зоны"
+  en: "Zone height"
+  es: "Altura de la zona"
+chart.vol.cvd:
+  ru: "Линия CVD (кумулятивная дельта)"
+  en: "CVD line (cumulative volume delta)"
+  es: "Línea CVD (delta acumulada)"
+chart.vol.hint:
+  ru: "Период Bv/Sv — в шапке графика; протяжка по зоне объёмов измеряет диапазон, клик убирает измеритель"
+  en: "The Bv/Sv window lives in the chart header; drag across the volume zone to measure a range, click to dismiss"
+  es: "La ventana Bv/Sv está en el encabezado; arrastra sobre la zona de volumen para medir, clic para quitar"
 chart.candles.title:
   ru: "Свечи и трейды"
   en: "Candles & trades"

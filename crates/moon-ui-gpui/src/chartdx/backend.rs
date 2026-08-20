@@ -145,6 +145,18 @@ impl PlatformLayers {
         }
     }
 
+    /// Applies the volume-band display config (fraction, pixel cap, master switch) ahead of the
+    /// next upload. Metal-only, like the graph itself.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    pub fn set_vol_band(&mut self, frac: f32, cap: f32, enabled: bool) {
+        #[cfg(target_os = "macos")]
+        self.metal.set_vol_band(frac, cap, enabled);
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (frac, cap, enabled);
+        }
+    }
+
     /// Fully replaces the layer's candle set when the series revision changes.
     pub fn set_candles(&mut self, data: Vec<CandleGpu>) {
         #[cfg(windows)]

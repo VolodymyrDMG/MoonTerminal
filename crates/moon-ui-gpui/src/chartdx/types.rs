@@ -314,11 +314,15 @@ pub struct ChartViewGpu {
     pub price_to_px: f32,
     pub view_price0: f32,
     pub marker_half: f32,
+    /// Right time edge of the drawable area (plot + glass) in pane-relative ms; segments with
+    /// edge-extension read it in the shaders as `pad`/`cv_pad`.
     pub pad: f32,
     pub volume_buy_inv: f32,
     pub volume_sell_inv: f32,
     pub volume_alpha: f32,
-    pub _pad2: f32,
+    /// Volume-band height in device pixels; `0` disables the band (the former spare `_pad2`
+    /// slot, so the uniform layout every backend shader mirrors is unchanged).
+    pub volume_band_px: f32,
 }
 
 /// Quad blit/background uniform.

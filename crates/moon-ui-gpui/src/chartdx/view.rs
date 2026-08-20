@@ -40,6 +40,6 @@ pub fn view_gpu(
         volume_buy_inv: 0.0,
         volume_sell_inv: 0.0,
         volume_alpha: DEFAULT_VOLUME_ALPHA,
-        _pad2: 0.0,
+        volume_band_px: 0.0,
     }
 }

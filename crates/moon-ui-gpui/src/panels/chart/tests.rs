@@ -82,3 +82,60 @@ fn chart_stacks_pass_their_workspace_group_into_every_panel() {
         "ChartPanel::new_addto(backend, workspace_group, num, bucket, epoch, theme, cx)"
     ));
 }
+
+/// The volume-measure gesture must occupy exactly its slot in the left-press priority chain:
+/// AFTER figure handling (drawing keeps its modifier gestures over the band) and BEFORE the
+/// trading gestures (inside the band a plain press measures — it must never place an order).
+/// The release half must distinguish a drag (keep the bracket) from a stationary click (clear).
+#[test]
+fn volume_measure_sits_between_figures_and_trading_in_the_press_chain() {
+    let source = include_str!("render_input.rs");
+    let down = source
+        .split("pub(super) fn mouse_down_left(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(super) fn mouse_down_right(").next())
+        .expect("left-press router must exist");
+    let probe = down
+        .find("vol_measure_probe")
+        .expect("band press probe must exist");
+    let fig = down
+        .find("try_fig_click")
+        .expect("figure branch must exist");
+    let trade = down
+        .find("try_place_order_click")
+        .expect("trading branch must exist");
+    assert!(fig < probe, "figure layer keeps priority over the band");
+    assert!(
+        probe < trade,
+        "a band press must never fall through to trading"
+    );
+
+    let up = source
+        .split("pub(super) fn mouse_up_left(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(super) fn mouse_down_right(").next())
+        .expect("left-release router must exist");
+    assert!(up.contains("this.vol_measure_drag.take()"));
+    assert!(
+        up.contains("set_vol_measure(pane, None)"),
+        "a stationary click must clear the bracket"
+    );
+}
+
+/// The header readout chain must stay wired end to end: the render pass pushes the global
+/// vol-view config into the engine, collects per-pane header data, and renders the overlay row.
+/// Dropping any link silently loses the Bv/Sv block, the 24h delta, or the Ses figure.
+#[test]
+fn chart_header_readouts_stay_wired_from_config_to_overlay() {
+    let render = include_str!("render.rs");
+    assert!(render.contains("self.chart.set_vol_view(vol_view)"));
+    assert!(render.contains("vol_header_data"));
+    assert!(render.contains("super::vol_header::header_element"));
+
+    let header = include_str!("vol_header.rs");
+    // 24h and Ses read the same sources the rest of the app trusts: the market's delta state
+    // through market_ticker, and the store's profit counters.
+    assert!(header.contains("market_ticker(core, market)"));
+    assert!(header.contains(".and_then(|d| d.profit)"));
+    assert!(header.contains("session_profit"));
+}

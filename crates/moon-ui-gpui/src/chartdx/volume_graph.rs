@@ -56,19 +56,23 @@ const RETAIN_TICKS: usize = 400_000;
 /// Extra window fraction accumulated on each side so panning inside the margin needs no rebuild.
 const RESAMPLE_MARGIN: f32 = 0.25;
 
-/// Returns the graph band height in device pixels for a pane of height `pane_h`.
+/// Returns the graph band height in device pixels for a pane of height `pane_h` at the
+/// configured band `frac`tion and pixel `cap` (see `VolViewCfg::band_fraction`/`band_max_px`).
 ///
-/// Text labels position against this, so it must stay equal to the shader's band expression.
-pub fn band_height_px(pane_h: f32) -> f32 {
-    (pane_h * BAND_FRACTION).min(BAND_MAX_PX)
+/// Text labels and the measure overlay position against this; the shader no longer computes the
+/// band itself — it receives this value through the view uniform's `volume_band_px`.
+pub fn band_height_px(pane_h: f32, frac: f32, cap: f32) -> f32 {
+    (pane_h * frac).min(cap)
 }
 
-/// One retained trade of the volume tape: absolute time, quote volume, and side.
+/// One retained trade of the volume tape: absolute time, quote volume, side, and the running
+/// signed cumulative (buy − sell) INCLUDING this trade, anchored at the oldest ingested tick.
 #[derive(Clone, Copy)]
 struct VolTick {
     time_ms: f64,
     quote: f32,
     sell: bool,
+    cum: f32,
 }
 
 /// Retained per-pane tick tape feeding the volume graph.
@@ -80,6 +84,10 @@ pub struct VolumeTape {
     ticks: Vec<VolTick>,
     /// True while a batch arrived with out-of-order times; sorted lazily before accumulation.
     unsorted: bool,
+    /// Running signed cumulative of the last ingested tick, extended on append. Pruning the
+    /// tape's head does not touch it: the CVD anchor is "the oldest tick ever ingested", so
+    /// retained `cum` values stay comparable across prunes.
+    cum_last: f32,
     pub revision: u64,
 }
 
@@ -90,6 +98,7 @@ impl VolumeTape {
             self.ticks.clear();
         }
         self.unsorted = false;
+        self.cum_last = 0.0;
         self.revision = self.revision.wrapping_add(1);
     }
 
@@ -114,10 +123,13 @@ impl VolumeTape {
                     self.unsorted = true;
                 }
             }
+            let sell = tick.side == Side::Sell;
+            self.cum_last += if sell { -quote } else { quote };
             self.ticks.push(VolTick {
                 time_ms: tick.time_ms,
                 quote,
-                sell: tick.side == Side::Sell,
+                sell,
+                cum: self.cum_last,
             });
             changed = true;
         }
@@ -135,16 +147,40 @@ impl VolumeTape {
         self.ticks.is_empty()
     }
 
-    /// Sorts the tape if a batch arrived out of order, then returns the slice covering
+    /// Sorts the tape if a batch arrived out of order — rebuilding the running cumulative,
+    /// which is only meaningful in time order — then returns the slice covering
     /// `[from_ms, to_ms)` by binary search.
     fn range(&mut self, from_ms: f64, to_ms: f64) -> &[VolTick] {
         if self.unsorted {
             self.ticks.sort_by(|a, b| a.time_ms.total_cmp(&b.time_ms));
+            let mut cum = 0.0f32;
+            for t in &mut self.ticks {
+                cum += if t.sell { -t.quote } else { t.quote };
+                t.cum = cum;
+            }
+            self.cum_last = cum;
             self.unsorted = false;
         }
         let lo = self.ticks.partition_point(|t| t.time_ms < from_ms);
         let hi = self.ticks.partition_point(|t| t.time_ms < to_ms);
         &self.ticks[lo..hi]
+    }
+
+    /// Sum the buy and sell quote volume of trades in `[from_ms, to_ms)`.
+    ///
+    /// Feeds the header Bv/Sv readout and the drag-measure overlay; both windows are tiny
+    /// against the tape, and the slice comes from the same binary search the resampler uses.
+    pub fn sum_window(&mut self, from_ms: f64, to_ms: f64) -> (f32, f32) {
+        let mut buy = 0.0f32;
+        let mut sell = 0.0f32;
+        for t in self.range(from_ms, to_ms) {
+            if t.sell {
+                sell += t.quote;
+            } else {
+                buy += t.quote;
+            }
+        }
+        (buy, sell)
     }
 }
 
@@ -156,6 +192,9 @@ pub struct ColumnsKey {
     t_hi: f32,
     time_to_px: f32,
     revision: u64,
+    /// Whether the delivered columns include the CVD step line; toggling the setting must
+    /// resample even when coverage still fits.
+    cvd: bool,
 }
 
 /// One resample result: column instances for the volume pass and the per-side visible maxima.
@@ -181,6 +220,7 @@ pub fn resample_if_stale(
     view_time0: f32,
     time_to_px: f32,
     window_px: f32,
+    cvd: bool,
 ) -> Option<ColumnsUpdate> {
     if time_to_px <= 0.0 || !time_to_px.is_finite() || window_px <= 0.0 {
         return None;
@@ -192,6 +232,7 @@ pub fn resample_if_stale(
     if let Some(k) = key {
         if k.revision == tape.revision
             && k.time_to_px == time_to_px
+            && k.cvd == cvd
             && k.t_lo <= need_lo
             && k.t_hi >= need_hi
         {
@@ -210,18 +251,39 @@ pub fn resample_if_stale(
         t_hi,
         time_to_px,
         revision: tape.revision,
+        cvd,
     });
 
     let count = ((((t_hi - t_lo) / step_ms).ceil() as usize) + 1).min(65_536);
     let mut buys = vec![0.0f32; count];
     let mut sells = vec![0.0f32; count];
-    for tick in tape.range(epoch_ms + f64::from(t_lo), epoch_ms + f64::from(t_hi)) {
+    // Per-column CVD sample: the running cumulative of the LAST trade in or before the column.
+    // `cum_base` seeds columns older than the first in-range trade, so panning right keeps the
+    // line continuous instead of restarting at zero on every resample window.
+    let mut cvd_at: Vec<f32> = Vec::new();
+    let mut cum_base = 0.0f32;
+    // Last column holding a real trade; the CVD line stops there instead of running flat
+    // through the empty right margin ahead of the live edge.
+    let mut cvd_last_idx = 0usize;
+    let range = tape.range(epoch_ms + f64::from(t_lo), epoch_ms + f64::from(t_hi));
+    let had_trades = !range.is_empty();
+    if cvd && had_trades {
+        cvd_at = vec![f32::NAN; count];
+        if let Some(first) = range.first() {
+            cum_base = first.cum - if first.sell { -first.quote } else { first.quote };
+        }
+    }
+    for tick in range {
         let t_rel = (tick.time_ms - epoch_ms) as f32;
         let idx = (((t_rel - t_lo) / step_ms) as usize).min(count - 1);
         if tick.sell {
             sells[idx] += tick.quote;
         } else {
             buys[idx] += tick.quote;
+        }
+        if cvd {
+            cvd_at[idx] = tick.cum;
+            cvd_last_idx = cvd_last_idx.max(idx);
         }
     }
 
@@ -261,6 +323,40 @@ pub fn resample_if_stale(
                 price: 0.0,
                 side: 1,
                 qty: sell,
+            });
+        }
+    }
+    // CVD step line as `side=2` instances: one marker per column at the cumulative's level,
+    // forward-filled through empty columns so the line never breaks, normalized to 0..=1 over
+    // THIS resample range (the shader maps that straight onto the band height). A flat
+    // cumulative sits mid-band. Emitted after the bars so the line blends over them.
+    if cvd && !cvd_at.is_empty() {
+        cvd_at.truncate(cvd_last_idx + 1);
+        let mut level = cum_base;
+        let mut lo = f32::INFINITY;
+        let mut hi = f32::NEG_INFINITY;
+        for v in &mut cvd_at {
+            if v.is_nan() {
+                *v = level;
+            } else {
+                level = *v;
+            }
+            lo = lo.min(*v);
+            hi = hi.max(*v);
+        }
+        let span = hi - lo;
+        for (idx, &v) in cvd_at.iter().enumerate() {
+            let norm = if span > f32::EPSILON {
+                // Keep a small inset so the line stays inside the band at its extremes.
+                0.04 + (v - lo) / span * 0.92
+            } else {
+                0.5
+            };
+            columns.push(ChartCross {
+                time_rel: t_lo + step_ms * idx as f32,
+                price: 0.0,
+                side: 2,
+                qty: norm,
             });
         }
     }

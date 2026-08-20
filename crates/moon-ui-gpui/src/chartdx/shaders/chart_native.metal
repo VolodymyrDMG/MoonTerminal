@@ -13,7 +13,7 @@ struct ChartView {
     float volume_buy_inv;
     float volume_sell_inv;
     float volume_alpha;
-    float _pad2;
+    float volume_band_px;
 };
 
 struct BackgroundParams {
@@ -392,20 +392,29 @@ vertex VolumeOut volume_vertex(uint vid [[vertex_id]], uint iid [[instance_id]],
                                constant ChartView& cv [[buffer(0)]],
                                const device Cross* crosses [[buffer(1)]]) {
     Cross c = crosses[iid];
+    float band = cv.volume_band_px;
     float sx = cv.bounds.x + (c.time_rel - cv.view_time0) * cv.time_to_px;
-    if (sx < cv.bounds.x - 2.0 || sx > cv.bounds.x + cv.bounds.z + 2.0 || c.qty <= 0.0) {
+    if (band <= 0.5 || sx < cv.bounds.x - 2.0 || sx > cv.bounds.x + cv.bounds.z + 2.0 ||
+        c.qty <= 0.0) {
         return { float4(2.0, 2.0, 0.0, 1.0), 0 };
+    }
+    float base = cv.bounds.y + cv.bounds.w - 1.0;
+    float bar_w = 2.5;
+    if (c.side == 2) {
+        // CVD step line: qty arrives pre-normalized to 0..1 of the band; draw a thin marker at
+        // that level, one column step wide, forming a continuous stepped line over the bars.
+        float y = base - saturate(c.qty) * band;
+        float2 px = float2(round(sx) - bar_w * 0.5, y - 1.0) + CORNERS_01[vid] * float2(bar_w, 2.0);
+        return { to_clip(px, cv.resolution), c.side };
     }
     float inv = c.side == 0 ? cv.volume_buy_inv : cv.volume_sell_inv;
     // The instances are pre-aggregated Moonbot-style graph columns: heights map linearly to the
     // visible-window maximum — the tallest visible column touches the band top and every other
-    // height is its true fraction of that, nothing clipped, nothing compressed. The band mirrors
-    // volume_graph.rs (BAND_FRACTION / BAND_MAX_PX). Width stays one column step (plus a hair
-    // against round() gaps): a trade occupies exactly its own time slot, so the graph never
-    // smears single trades into wide blocks the tape does not contain.
-    float h = max(1.0, saturate(c.qty * inv) * min(cv.bounds.w * 0.22, 260.0));
-    float base = cv.bounds.y + cv.bounds.w - 1.0;
-    float bar_w = 2.5;
+    // height is its true fraction of that, nothing clipped, nothing compressed. The band height
+    // arrives from the view uniform (volume_band_px, driven by vol_view.toml). Width stays one
+    // column step (plus a hair against round() gaps): a trade occupies exactly its own time slot,
+    // so the graph never smears single trades into wide blocks the tape does not contain.
+    float h = max(1.0, saturate(c.qty * inv) * band);
     float2 px = float2(round(sx) - bar_w * 0.5, base - h) + CORNERS_01[vid] * float2(bar_w, h);
     return { to_clip(px, cv.resolution), c.side };
 }
@@ -413,6 +422,10 @@ vertex VolumeOut volume_vertex(uint vid [[vertex_id]], uint iid [[instance_id]],
 fragment float4 volume_fragment(VolumeOut in [[stage_in]], constant ChartView& cv [[buffer(0)]]) {
     float3 buy = float3(0.18431, 0.65882, 0.36078);
     float3 sell = float3(1.0, 0.55686, 0.35294);
+    if (in.side == 2) {
+        // CVD line: a cool cyan apart from both bar colors, slightly above the bar alpha.
+        return float4(0.38, 0.72, 1.0, 0.9);
+    }
     return float4(in.side == 0 ? buy : sell, saturate(cv.volume_alpha));
 }
 

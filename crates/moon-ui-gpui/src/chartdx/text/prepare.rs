@@ -290,11 +290,15 @@ impl RenderState {
             // platforms without the live graph never label an absent band.
             if let Some((buy_max, sell_max)) = self.panes[idx].volume_scale {
                 let vmax = buy_max.max(sell_max);
-                if vmax > 0.0 {
+                if vmax > 0.0 && self.vol_view.enabled {
                     use crate::chartdx::volume_graph::{
                         SCALE_HEADROOM, band_height_px, format_quote_short,
                     };
-                    let band_h = band_height_px(view.bounds[3]) / sf;
+                    let band_h = band_height_px(
+                        view.bounds[3],
+                        self.vol_view.band_fraction(),
+                        self.vol_view.band_max_px(),
+                    ) / sf;
                     let label_x = plot_right - 6.0;
                     // Each label sits at the height its value actually draws at — the Moonbot
                     // bracket: the top label tops the tallest visible column (below the band
@@ -313,6 +317,74 @@ impl RenderState {
                             y_of(value),
                             1.0,
                             0.5,
+                            label_neutral,
+                        )?;
+                    }
+                }
+            }
+
+            // Volume-measure labels: totals of the bracketed range (geometry in
+            // `render_state.rs::sync_readout_params`) — Σ with the buy/sell split on one line,
+            // price change and duration on the second, both centered over the bracket. The bot
+            // prints its measured sums the same way, right at the bracket.
+            if let Some((m0, m1)) = self.panes[idx].vol_measure {
+                if self.vol_view.enabled {
+                    use crate::chartdx::volume_graph::{band_height_px, format_quote_short};
+                    let (lo, hi) = if m0 <= m1 { (m0, m1) } else { (m1, m0) };
+                    let epoch = self.panes[idx].epoch_ms;
+                    let (bv, sv) = self.panes[idx]
+                        .volume_tape
+                        .sum_window(epoch + f64::from(lo), epoch + f64::from(hi));
+                    // Price change across the range from the retained Last-price line.
+                    let pct = {
+                        let pts = &self.panes[idx].history_buffers.last_points;
+                        let price_at = |t: f32| {
+                            let target = epoch + f64::from(t);
+                            let i = pts.partition_point(|p| p.time_ms < target);
+                            pts.get(i.saturating_sub(1)).or_else(|| pts.first()).map(|p| p.price)
+                        };
+                        match (price_at(lo), price_at(hi)) {
+                            (Some(p0), Some(p1)) if p0 > 0.0 => {
+                                Some(f64::from(p1 - p0) / f64::from(p0) * 100.0)
+                            }
+                            _ => None,
+                        }
+                    };
+                    let band_h = band_height_px(
+                        view.bounds[3],
+                        self.vol_view.band_fraction(),
+                        self.vol_view.band_max_px(),
+                    ) / sf;
+                    let ttp = (view.time_to_px / sf).max(moon_chart::view::MIN_PX_PER_MS);
+                    let xm = plot_left + ((lo + hi) * 0.5 - view.view_time0) / sf * ttp * sf;
+                    let xm = xm.clamp(plot_left + 40.0, plot_right - 40.0);
+                    let y0 = (plot_bottom - band_h - 6.0).max(plot_top + 12.0);
+                    let line_h = self.label_font_px() + 3.0;
+                    let sum_line = format!(
+                        "Σ {}  B {} / S {}",
+                        format_quote_short(bv + sv),
+                        format_quote_short(bv),
+                        format_quote_short(sv)
+                    );
+                    let secs = f64::from(hi - lo) / 1000.0;
+                    let mut ctx_line = match pct {
+                        Some(p) => format!("Δ {p:+.2}%  {secs:.1}s"),
+                        None => format!("{secs:.1}s"),
+                    };
+                    if !(bv > 0.0 || sv > 0.0) {
+                        ctx_line.push_str("  —");
+                    }
+                    for (i, text) in [sum_line, ctx_line].iter().enumerate() {
+                        draw_label_text_run(
+                            &mut self.text_runs,
+                            &mut self.text_run_cursor,
+                            ctx,
+                            self.label_font_delta,
+                            text,
+                            xm,
+                            y0 - line_h * (1 - i) as f32,
+                            0.5,
+                            1.0,
                             label_neutral,
                         )?;
                     }

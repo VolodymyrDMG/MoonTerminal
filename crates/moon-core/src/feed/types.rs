@@ -828,6 +828,27 @@ pub enum ClientSettingsEdit {
     ManualStrategy { on: bool, id: u64 },
 }
 
+/// Core report/profit counters from moonproto's `ProfitStateCommand` — the numbers behind the
+/// bot's own "Ses:" header figure and its settings-window profit rows.
+///
+/// `session_profit`/`session_trades` mirror `rep_total_profit`/`rep_total_trades` — the pair the
+/// Session reset ([`ResetProfitKind::Session`] → `CurrentProfit`) clears. The second wire pair
+/// (`rep_trades_total`/`rep_count_trades`) is carried verbatim as `traded_volume`/
+/// `counted_trades`; its exact meaning in the bot's report header (turnover vs an all-time pair)
+/// is provisional until confirmed live. This is report-DB state, not an order stream: values
+/// change on the bot's cadence and stay frozen between pushes.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct ProfitState {
+    /// Session profit in the core's quote currency (the bot's "Ses" figure).
+    pub session_profit: f64,
+    /// Trades counted into the session profit.
+    pub session_trades: i32,
+    /// Second wire figure (`rep_trades_total`), provisionally the traded volume in quote.
+    pub traded_volume: f64,
+    /// Second wire count (`rep_count_trades`).
+    pub counted_trades: i32,
+}
+
 /// Profit counter to reset through moonproto `ResetProfitKind`, selected by the Session or
 /// All-Time buttons in the core-settings popup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1010,6 +1031,9 @@ pub enum FeedMsg {
     LevManage(LevManageState),
     /// Core runtime and passive-mode state sent on `RuntimeStateUpdated`.
     RuntimeState(RuntimeState),
+    /// Core report/profit counters sent on `ProfitStateUpdated` — the bot's session ("Ses") and
+    /// all-time profit totals from its report DB layer, resettable through `ResetProfit`.
+    ProfitState(ProfitState),
     /// Core account hedge mode for dual-side positions, sent on `HedgeModeUpdated`.
     HedgeMode(bool),
     /// Exchange API-key expiration for this core, sent on a successful

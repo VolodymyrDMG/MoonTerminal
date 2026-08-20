@@ -123,6 +123,8 @@ pub struct CoreData {
     pub lev_manage: Option<LevManageState>,
     /// Core runtime and passive-mode state, or `None` until it arrives.
     pub runtime_state: Option<RuntimeState>,
+    /// Core report/profit counters (the bot's "Ses" figure), or `None` until they arrive.
+    pub profit: Option<crate::feed::ProfitState>,
     /// Account hedge mode for dual-side positions, or `None` until the core responds.
     pub hedge_mode: Option<bool>,
     /// Exchange API-key expiration, or `None` while this core has never answered. A LATER failure
@@ -181,6 +183,7 @@ pub struct CoreData {
     pub client_settings_rev: u64,
     pub lev_manage_rev: u64,
     pub runtime_state_rev: u64,
+    pub profit_rev: u64,
     pub hedge_mode_rev: u64,
     /// Advances only when the API-key ANSWER changes — not when the same answer is re-received on
     /// the six-hourly poll, and not on the receipt stamp alone.
@@ -220,6 +223,7 @@ impl CoreData {
             client_settings: None,
             lev_manage: None,
             runtime_state: None,
+            profit: None,
             hedge_mode: None,
             api_expiry: None,
             engine_actions: VecDeque::new(),
@@ -245,6 +249,7 @@ impl CoreData {
             client_settings_rev: 0,
             lev_manage_rev: 0,
             runtime_state_rev: 0,
+            profit_rev: 0,
             hedge_mode_rev: 0,
             api_expiry_rev: 0,
             log_rev: 0,
@@ -434,6 +439,12 @@ impl CoreData {
                 if self.runtime_state != Some(state) {
                     self.runtime_state = Some(state);
                     self.runtime_state_rev = self.runtime_state_rev.wrapping_add(1);
+                }
+            }
+            FeedMsg::ProfitState(profit) => {
+                if self.profit != Some(profit) {
+                    self.profit = Some(profit);
+                    self.profit_rev = self.profit_rev.wrapping_add(1);
                 }
             }
             FeedMsg::Endpoint(endpoint) => {

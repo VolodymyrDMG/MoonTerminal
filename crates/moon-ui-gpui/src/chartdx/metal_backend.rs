@@ -303,6 +303,11 @@ pub struct MetalLayers {
     volume_sell_max: f32,
     /// Moonbot-style volume-graph columns delivered by `set_volume_columns`, drawn live.
     volume_columns: Vec<ChartCross>,
+    /// Volume-band geometry and visibility from `VolViewCfg`, applied by `set_vol_band` on every
+    /// prepare: (fraction of pane height, pixel cap, master switch).
+    vol_band_frac: f32,
+    vol_band_cap: f32,
+    vol_enabled: bool,
     /// Per-side visible maxima of `volume_columns`, the live pass's normalization scale.
     volume_columns_scale: (f32, f32),
     volume_columns_dirty: bool,
@@ -360,6 +365,9 @@ impl MetalLayers {
             volume_buy_max: 1e-6,
             volume_sell_max: 1e-6,
             volume_columns: Vec::new(),
+            vol_band_frac: super::volume_graph::BAND_FRACTION,
+            vol_band_cap: super::volume_graph::BAND_MAX_PX,
+            vol_enabled: true,
             volume_columns_scale: (1e-6, 1e-6),
             volume_columns_dirty: false,
             bg_uniform: BufferSlot::default(),
@@ -787,7 +795,7 @@ impl MetalLayers {
             volume_buy_inv: 1.0 / self.volume_buy_max.max(1e-6),
             volume_sell_inv: 1.0 / self.volume_sell_max.max(1e-6),
             volume_alpha: DEFAULT_VOLUME_ALPHA,
-            _pad2: 0.0,
+            volume_band_px: 0.0,
         };
 
         let pass = metal::RenderPassDescriptor::new();
@@ -1095,6 +1103,13 @@ impl MetalLayers {
         view.volume_buy_inv = 1.0 / self.volume_buy_max.max(1e-6);
         view.volume_sell_inv = 1.0 / self.volume_sell_max.max(1e-6);
         view.volume_alpha = DEFAULT_VOLUME_ALPHA;
+        // Band height from the volume-view config; `0` tells the volume shader to draw nothing.
+        let band_h = if self.vol_enabled {
+            super::volume_graph::band_height_px(view.bounds[3], self.vol_band_frac, self.vol_band_cap)
+        } else {
+            0.0
+        };
+        view.volume_band_px = band_h;
         self.bg_uniform
             .write(device, "moon_chart_bg_uniform", &[*background_params]);
         self.grid_uniform
@@ -1105,8 +1120,8 @@ impl MetalLayers {
             .write(device, "moon_chart_readout_rects", &[] as &[ReadoutRect]);
         // Volume-band underlay: a faint plate with a hairline top edge under the graph band —
         // Moonbot's separate Vol-zone look. Baked with the base layers, beneath the candles;
-        // geometry depends only on the pane bounds, and every prepare rewrites it.
-        let band_h = super::volume_graph::band_height_px(view.bounds[3]);
+        // geometry depends only on the pane bounds and config, and every prepare rewrites it.
+        // With the band disabled the rects collapse to zero height and draw nothing.
         let band_y = view.bounds[1] + view.bounds[3] - band_h;
         let band_m = [0.0, view.resolution[0], view.resolution[1], 0.0];
         let band_rects = [
@@ -1117,7 +1132,7 @@ impl MetalLayers {
                 m: band_m,
             },
             ReadoutRect {
-                dst: [view.bounds[0], band_y, view.bounds[2], 1.0],
+                dst: [view.bounds[0], band_y, view.bounds[2], if band_h > 0.0 { 1.0 } else { 0.0 }],
                 bg: super::volume_graph::BAND_EDGE_RGBA,
                 border: [0.0; 4],
                 m: band_m,
@@ -1217,6 +1232,12 @@ impl MetalLayers {
         view.volume_buy_inv = 1.0 / self.volume_buy_max.max(1e-6);
         view.volume_sell_inv = 1.0 / self.volume_sell_max.max(1e-6);
         view.volume_alpha = DEFAULT_VOLUME_ALPHA;
+        let band_h = if self.vol_enabled {
+            super::volume_graph::band_height_px(view.bounds[3], self.vol_band_frac, self.vol_band_cap)
+        } else {
+            0.0
+        };
+        view.volume_band_px = band_h;
         self.bg_uniform
             .write(device, "moon_chart_bg_uniform", &[*background_params]);
         self.grid_uniform
@@ -1258,8 +1279,21 @@ impl MetalLayers {
     pub fn set_volume_columns(&mut self, columns: &[ChartCross], buy_max: f32, sell_max: f32) {
         self.volume_columns.clear();
         self.volume_columns.extend_from_slice(columns);
-        self.volume_columns_scale = (buy_max.max(1e-6), sell_max.max(1e-6));
+        // ONE shared scale for both sides, like the bot: the scale labels already state a single
+        // maximum, so per-side normalization would draw the quieter side taller than its labels
+        // claim. The tallest visible column of EITHER side touches the top; the other side's bars
+        // are their true fraction of that.
+        let shared = buy_max.max(sell_max).max(1e-6);
+        self.volume_columns_scale = (shared, shared);
         self.volume_columns_dirty = true;
+    }
+
+    /// Apply the volume-band display config (fraction, pixel cap, master switch); geometry is
+    /// recomputed in the next upload, so this only stores plain fields.
+    pub fn set_vol_band(&mut self, frac: f32, cap: f32, enabled: bool) {
+        self.vol_band_frac = frac;
+        self.vol_band_cap = cap;
+        self.vol_enabled = enabled;
     }
 
     fn recalc_volume_scale(&mut self) {

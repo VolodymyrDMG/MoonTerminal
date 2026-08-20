@@ -248,3 +248,30 @@ fn log_since_recovers_from_a_restarted_counter() {
 
     assert_eq!(lines.map(|l| l.msg.clone()).collect::<Vec<_>>(), ["fresh"]);
 }
+
+/// `store.rs:CoreData::apply` retains the bot's report/profit counters and bumps `profit_rev`
+/// only on a change — the "Ses" header chip repaints on real updates, not on every re-push.
+#[test]
+fn profit_state_updates_bump_their_revision_once() {
+    let mut core = CoreData::new();
+    let counters = crate::feed::ProfitState {
+        session_profit: 42.69,
+        session_trades: 7,
+        traded_volume: 1_234.5,
+        counted_trades: 9,
+    };
+
+    core.apply(FeedMsg::ProfitState(counters));
+    assert_eq!(core.profit, Some(counters));
+    assert_eq!(core.profit_rev, 1);
+
+    core.apply(FeedMsg::ProfitState(counters));
+    assert_eq!(core.profit_rev, 1, "an identical push must not churn consumers");
+
+    core.apply(FeedMsg::ProfitState(crate::feed::ProfitState {
+        session_profit: -3.0,
+        ..counters
+    }));
+    assert_eq!(core.profit_rev, 2);
+    assert_eq!(core.profit.unwrap().session_profit, -3.0);
+}

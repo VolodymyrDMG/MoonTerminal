@@ -303,6 +303,9 @@ struct PaneRender {
     volume_columns_key: Option<volume_graph::ColumnsKey>,
     /// Per-side visible maxima of the delivered volume columns, for the graph's scale labels.
     volume_scale: Option<(f32, f32)>,
+    /// Active volume-zone measure range in pane-relative milliseconds, set by dragging across
+    /// the band; drawn as a bracket by `sync_readout_params` and labeled by `text/prepare`.
+    vol_measure: Option<(f32, f32)>,
     last_line_upload: Vec<PriceLinePoint>,
     mark_line_upload: Vec<PriceLinePoint>,
     /// Reusable candle-layer upload buffer.
@@ -476,6 +479,7 @@ impl PaneRender {
             volume_tape: volume_graph::VolumeTape::default(),
             volume_columns_key: None,
             volume_scale: None,
+            vol_measure: None,
             last_line_upload: Vec::new(),
             mark_line_upload: Vec::new(),
             candle_upload: Vec::new(),
@@ -661,6 +665,9 @@ struct RenderState {
     /// A `&'static str` because a mode marker is a GLYPH, not a sentence: nothing to translate and
     /// nothing to allocate on the present path that redraws it.
     cursor_badge: Option<&'static str>,
+    /// Chart volume-zone preferences (band on/off + height, CVD, header window) from
+    /// vol_view.toml, applied by `ChartEngine::set_vol_view`.
+    vol_view: moon_core::config::VolViewCfg,
     pixel_scale: f32,
     /// Lazily created own-pass scissor rasterizer, recreated on device changes. It clips layers to
     /// the panel so price-positioned order books and orders cannot spill beyond the plot onto

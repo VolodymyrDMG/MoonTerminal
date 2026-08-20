@@ -79,11 +79,32 @@ fn write_cfg<T: GraphicsPopupHost>(
     });
 }
 
+/// Edit the global volume-zone config; unlike `layout.toml` there is no persistence
+/// coordinator behind `vol_view.toml`, so the file saves immediately like `arb_view.toml`.
+fn write_vol<T: GraphicsPopupHost>(
+    entity: &Entity<T>,
+    app: &mut App,
+    f: impl FnOnce(&mut moon_core::config::VolViewCfg),
+) {
+    entity.update(app, |this, cx| {
+        this.backend().update(cx, |b, bcx| {
+            let before = b.vol_view.view;
+            f(&mut b.vol_view.view);
+            if b.vol_view.view != before {
+                b.vol_view.save();
+                bcx.notify();
+            }
+        });
+        cx.notify();
+    });
+}
+
 /// Render popup content by reading the stored values on every render for the stateless controls.
 fn render_graphics_popup<T: GraphicsPopupHost>(
     id: &str,
     entity: Entity<T>,
     cfg: ChartGraphicsCfg,
+    vol: moon_core::config::VolViewCfg,
     p: MoonPalette,
     cx: &App,
 ) -> AnyElement {
@@ -178,6 +199,53 @@ fn render_graphics_popup<T: GraphicsPopupHost>(
         .text_color(rgb(p.text_muted))
         .child(t!("chart.graphics.global_hint").to_string());
 
+    // --- Volume zone: the Moonbot-style time-volume band at the bottom of every pane. ---
+    let vol_enabled_cb = {
+        let entity = entity.clone();
+        MoonCheckbox::new(SharedString::from(format!("{id}-vol-on")))
+            .label(t!("chart.vol.enabled").to_string())
+            .checked(vol.enabled)
+            .size(MoonCheckboxSize::Compact)
+            .on_change(move |ch: &bool, _w, app| {
+                let v = *ch;
+                write_vol(&entity, app, |c| c.enabled = v);
+            })
+    };
+    let vol_height_row = {
+        let entity = entity.clone();
+        let current = usize::from(vol.height.min(moon_core::config::VOL_HEIGHT_L));
+        seg_row(
+            format!("{id}-vol-height"),
+            t!("chart.vol.height").to_string(),
+            ["S", "M", "L"]
+                .iter()
+                .enumerate()
+                .map(|(index, v)| ((*v).to_string(), index == current))
+                .collect(),
+            34.0,
+            p,
+            cx,
+            move |ix, app| {
+                write_vol(&entity, app, |c| c.height = ix.min(2) as u8);
+            },
+        )
+    };
+    let vol_cvd_cb = {
+        let entity = entity.clone();
+        MoonCheckbox::new(SharedString::from(format!("{id}-vol-cvd")))
+            .label(t!("chart.vol.cvd").to_string())
+            .checked(vol.cvd)
+            .size(MoonCheckboxSize::Compact)
+            .on_change(move |ch: &bool, _w, app| {
+                let v = *ch;
+                write_vol(&entity, app, |c| c.cvd = v);
+            })
+    };
+    let vol_hint = div()
+        .text_size(design::t_caption(cx))
+        .text_color(rgb(p.text_muted))
+        .child(t!("chart.vol.hint").to_string());
+
     // Chrome is MoonPopover's; see `popover_contents_do_not_paint_a_second_surface`.
     v_flex()
         .id(SharedString::from(format!("{id}-popup")))
@@ -219,6 +287,16 @@ fn render_graphics_popup<T: GraphicsPopupHost>(
                     .gap(design::ui_px(cx, 6.0))
                     .child(hide_sell_cb)
                     .child(hide_sell_hint),
+            ),
+        )
+        .child(
+            popup_group("frame-vol", t!("chart.vol.title")).child(
+                v_flex()
+                    .gap(design::ui_px(cx, 6.0))
+                    .child(vol_enabled_cb)
+                    .child(vol_height_row)
+                    .child(vol_cvd_cb)
+                    .child(vol_hint),
             ),
         )
         .child(global_hint)
@@ -311,7 +389,8 @@ pub(super) fn graphics_popup_host<T: GraphicsPopupHost>(
     }
     let p = MoonPalette::active(cx);
     let cfg = this.graphics_cfg(cx);
+    let vol = this.backend().read(cx).vol_view.view;
     let entity = cx.entity();
-    popover = popover.content(render_graphics_popup(id_prefix, entity, cfg, p, cx));
+    popover = popover.content(render_graphics_popup(id_prefix, entity, cfg, vol, p, cx));
     popover
 }

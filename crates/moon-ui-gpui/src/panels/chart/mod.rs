@@ -14,6 +14,7 @@
 //! [`render_input`].
 
 mod arb;
+mod vol_header;
 mod click_series;
 mod figures;
 mod geom;
@@ -166,6 +167,11 @@ pub struct ChartPanel {
     /// Whether the panel is present in this window's GPUI scene. Hidden tabs skip CPU data prepare
     /// because their `gpu_canvas` will not be queried or drawn.
     scene_visible: bool,
+    /// Pane whose header Bv/Sv window menu is open, if any.
+    vol_menu_pane: Option<usize>,
+    /// Live volume-measure drag: `(pane, press time_rel, press x)`; the bracket itself is engine
+    /// state and outlives the drag until the next band click clears it.
+    vol_measure_drag: Option<(usize, f32, f32)>,
     /// Whether the panel is a Main-stack tile. The outer ScrollBox owns wheel events in this mode;
     /// fullscreen and numbered AddToChart or Custom panels retain normal chart zoom.
     main_stack_scroll: bool,
@@ -431,6 +437,8 @@ impl ChartPanel {
             settings_sig,
             fast: true,
             scene_visible: false,
+            vol_menu_pane: None,
+            vol_measure_drag: None,
             main_stack_scroll: false,
             last_axis_notify_data_sig: u64::MAX,
             compare_eligible: false,
@@ -582,6 +590,8 @@ impl ChartPanel {
             settings_sig,
             fast: false,
             scene_visible: false,
+            vol_menu_pane: None,
+            vol_measure_drag: None,
             main_stack_scroll: false,
             last_axis_notify_data_sig: u64::MAX,
             compare_eligible: false,

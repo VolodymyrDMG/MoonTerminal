@@ -446,6 +446,12 @@ pub fn arb_view_path() -> PathBuf {
     cfg_dir().join("arb_view.toml")
 }
 
+/// Chart volume-zone settings (band on/off + height, CVD, header Bv/Sv window), portable like
+/// `arb_view.toml`.
+pub fn vol_view_path() -> PathBuf {
+    cfg_dir().join("vol_view.toml")
+}
+
 /// Hotkeys and mouse gestures in a separate portable file that can be shared. Before schema v13,
 /// they lived in a settings.toml section and are migrated once during load.
 pub fn hotkeys_path() -> PathBuf {

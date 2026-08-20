@@ -397,6 +397,51 @@ impl RenderState {
             let plot_w = pr.view.bounds[2] / sf;
             let plot_h = pr.view.bounds[3] / sf;
             let plot_right = plot_left + plot_w;
+
+            // Volume-measure bracket: a translucent fill between two 1-px edges over the band's
+            // height, rebuilt per frame like every readout rect so it tracks a live drag with no
+            // extra plumbing. Labels are text-prepared in `text/prepare.rs`; this is geometry
+            // only. Pushed before cursor plates so labels stay above the fill.
+            if let (Some((m0, m1)), true) = (pr.vol_measure, self.vol_view.enabled) {
+                let band = crate::chartdx::volume_graph::band_height_px(
+                    pr.view.bounds[3],
+                    self.vol_view.band_fraction(),
+                    self.vol_view.band_max_px(),
+                );
+                let ttp = pr.view.time_to_px;
+                if band > 0.0 && ttp > 0.0 {
+                    let (lo, hi) = if m0 <= m1 { (m0, m1) } else { (m1, m0) };
+                    let x0 = (pr.view.bounds[0] + (lo - pr.view.view_time0) * ttp)
+                        .clamp(pr.view.bounds[0], pr.view.bounds[0] + pr.view.bounds[2]);
+                    let x1 = (pr.view.bounds[0] + (hi - pr.view.view_time0) * ttp)
+                        .clamp(pr.view.bounds[0], pr.view.bounds[0] + pr.view.bounds[2]);
+                    let base = pr.view.bounds[1] + pr.view.bounds[3];
+                    let top = base - band;
+                    let edge = [0.62, 0.78, 1.0, 0.85];
+                    let m_flat = [0.0, 1.0, 1.0, 0.0];
+                    pr.readout_rects.push(ReadoutRect {
+                        dst: [x0, top, (x1 - x0).max(1.0), band],
+                        bg: [0.62, 0.78, 1.0, 0.10],
+                        border: [0.0; 4],
+                        m: m_flat,
+                    });
+                    for x in [x0, x1] {
+                        pr.readout_rects.push(ReadoutRect {
+                            dst: [x - 0.5 * sf, top, 1.0 * sf, band],
+                            bg: edge,
+                            border: [0.0; 4],
+                            m: m_flat,
+                        });
+                    }
+                    // Top connector, the bracket's spine.
+                    pr.readout_rects.push(ReadoutRect {
+                        dst: [x0, top, (x1 - x0).max(1.0), 1.0 * sf],
+                        bg: edge,
+                        border: [0.0; 4],
+                        m: m_flat,
+                    });
+                }
+            }
             // Price-axis side: Hide omits the cursor-price plate because no axis or gutter exists;
             // Right places it at the panel's right edge beyond the order book. Keep this synchronized
             // with `text/prepare.rs::prepare_text`.
@@ -666,16 +711,32 @@ impl RenderState {
                     cursor_params.resolution = res;
                     orderbook_view.resolution = res;
                     crate::diag::bump(&crate::diag::CHART_GPU_PREPARE);
+                    // Volume-band config reaches the backend on every prepare (plain field
+                    // stores, no dirtiness). With the band disabled the columns are cleared once
+                    // and the resample stays parked until re-enabled.
+                    pr.layers.set_vol_band(
+                        self.vol_view.band_fraction(),
+                        self.vol_view.band_max_px(),
+                        self.vol_view.enabled,
+                    );
+                    if !self.vol_view.enabled {
+                        if pr.volume_scale.is_some() || pr.volume_columns_key.is_some() {
+                            pr.volume_scale = None;
+                            pr.volume_columns_key = None;
+                            pr.layers.set_volume_columns(&[], 0.0, 0.0);
+                        }
+                    }
                     // Deliver Moonbot-style volume-graph columns when the cached coverage no
                     // longer fits the view or the bucket sums changed. The resample is keyed, so
                     // steady panning inside the margin costs nothing here.
-                    if let Some(update) = super::volume_graph::resample_if_stale(
+                    else if let Some(update) = super::volume_graph::resample_if_stale(
                         &mut pr.volume_tape,
                         &mut pr.volume_columns_key,
                         pr.epoch_ms,
                         view.view_time0,
                         view.time_to_px,
                         view.bounds[2],
+                        self.vol_view.cvd,
                     ) {
                         pr.volume_scale = (update.buy_max > 0.0 || update.sell_max > 0.0)
                             .then_some((update.buy_max, update.sell_max));
