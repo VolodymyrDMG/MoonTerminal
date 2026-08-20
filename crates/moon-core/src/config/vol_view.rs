@@ -15,6 +15,17 @@ pub const VOL_HEIGHT_S: u8 = 0;
 pub const VOL_HEIGHT_M: u8 = 1;
 pub const VOL_HEIGHT_L: u8 = 2;
 
+/// Header-readout placement slots: two bands (top edge of the plot, bottom edge above the
+/// volume zone) × three anchors, plus "hidden". Stored as a small integer so the TOML stays
+/// hand-editable; every out-of-range byte reads as hidden rather than as a random corner.
+pub const VOL_POS_TOP_LEFT: u8 = 0;
+pub const VOL_POS_TOP_CENTER: u8 = 1;
+pub const VOL_POS_TOP_RIGHT: u8 = 2;
+pub const VOL_POS_BOTTOM_LEFT: u8 = 3;
+pub const VOL_POS_BOTTOM_CENTER: u8 = 4;
+pub const VOL_POS_BOTTOM_RIGHT: u8 = 5;
+pub const VOL_POS_HIDDEN: u8 = 6;
+
 /// Chart volume-zone configuration.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -29,6 +40,14 @@ pub struct VolViewCfg {
     pub cvd: bool,
     /// Header Bv/Sv window in seconds; the header menu offers 10s/30s/1m/5m/15m/1h.
     pub window_secs: u16,
+    /// Placement slot of the Bv/Sv block (window chip, figures, net delta, pressure bar) —
+    /// one of the `VOL_POS_*` values. Defaults to top-center: the plot's top-LEFT already
+    /// carries the canvas caption plates ("Сделки/ордера"), which taught us that lesson.
+    pub pos_vol: u8,
+    /// Placement slot of the 24h-delta chip.
+    pub pos_delta: u8,
+    /// Placement slot of the session-profit ("Ses") chip.
+    pub pos_ses: u8,
 }
 
 impl Default for VolViewCfg {
@@ -38,6 +57,9 @@ impl Default for VolViewCfg {
             height: VOL_HEIGHT_M,
             cvd: true,
             window_secs: 60,
+            pos_vol: VOL_POS_TOP_CENTER,
+            pos_delta: VOL_POS_TOP_RIGHT,
+            pos_ses: VOL_POS_TOP_RIGHT,
         }
     }
 }
@@ -67,6 +89,11 @@ impl VolViewCfg {
             0 => 60,
             s => u32::from(s.clamp(5, 3600)),
         }
+    }
+
+    /// Normalize a stored placement byte: anything past the last real slot reads as hidden.
+    pub fn pos_clamped(pos: u8) -> u8 {
+        pos.min(VOL_POS_HIDDEN)
     }
 }
 

@@ -130,7 +130,7 @@ fn chart_header_readouts_stay_wired_from_config_to_overlay() {
     let render = include_str!("render.rs");
     assert!(render.contains("self.chart.set_vol_view(vol_view)"));
     assert!(render.contains("vol_header_data"));
-    assert!(render.contains("super::vol_header::header_element"));
+    assert!(render.contains("super::vol_header::header_overlays"));
 
     let header = include_str!("vol_header.rs");
     // 24h and Ses read the same sources the rest of the app trusts: the market's delta state

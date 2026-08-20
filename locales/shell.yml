@@ -517,6 +517,18 @@ chart.vol.cvd:
   ru: "Линия CVD (кумулятивная дельта)"
   en: "CVD line (cumulative volume delta)"
   es: "Línea CVD (delta acumulada)"
+chart.vol.pos_vol:
+  ru: "Блок Bv/Sv"
+  en: "Bv/Sv block"
+  es: "Bloque Bv/Sv"
+chart.vol.pos_delta:
+  ru: "Дельта 24ч"
+  en: "24h delta"
+  es: "Delta 24h"
+chart.vol.pos_ses:
+  ru: "Ses (профит сессии)"
+  en: "Ses (session profit)"
+  es: "Ses (beneficio de sesión)"
 chart.vol.hint:
   ru: "Период Bv/Sv — в шапке графика; протяжка по зоне объёмов измеряет диапазон, клик убирает измеритель"
   en: "The Bv/Sv window lives in the chart header; drag across the volume zone to measure a range, click to dismiss"

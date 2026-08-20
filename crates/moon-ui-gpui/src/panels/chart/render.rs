@@ -363,8 +363,10 @@ impl Render for ChartPanel {
             };
         let arb_anchor_right = arb_cfg.right;
         // Header readout data per pane: Bv/Sv from the engine's tick tape, 24h from the market's
-        // delta state, Ses from the core's profit counters. Placed right of the corner controls;
-        // when the arb legend is on the left, it starts at top+24 and this row stays above it.
+        // delta state, Ses from the core's profit counters. Each element carries a configured
+        // slot (two bands × three anchors); the band rectangles computed here keep the top row
+        // clear of the corner pin/lock/close controls and put the bottom row just above the
+        // volume zone (or the time axis when the zone is off).
         let vol_window = vol_view.window_secs_clamped();
         let vol_headers: Vec<super::vol_header::VolHeader> = {
             let b = self.backend.read(cx);
@@ -373,9 +375,31 @@ impl Render for ChartPanel {
                 .filter_map(|(idx, rect, _)| {
                     let (core, market) = self.chart.pane_target(*idx)?;
                     let mut h = self.vol_header_data(&b, *idx, core, &market, vol_window);
-                    h.left = rect.x / ppp + axis_off + 44.0;
-                    h.top = rect.y / ppp + 2.0;
-                    h.right = (rect.x + rect.w) / ppp;
+                    let time_axis_h = if self.time_axis_visible {
+                        moon_chart::TIME_AXIS_H * ppp
+                    } else {
+                        0.0
+                    };
+                    let plot_h = (rect.h - time_axis_h).max(1.0);
+                    let band_dev = if vol_view.enabled {
+                        crate::chartdx::volume_graph::band_height_px(
+                            plot_h,
+                            vol_view.band_fraction(),
+                            vol_view.band_max_px(),
+                        )
+                    } else {
+                        0.0
+                    };
+                    h.top = super::vol_header::BandRect {
+                        left: rect.x / ppp + axis_off + 44.0,
+                        right: (rect.x + rect.w) / ppp - 24.0,
+                        top: rect.y / ppp + 2.0,
+                    };
+                    h.bottom = super::vol_header::BandRect {
+                        left: rect.x / ppp + axis_off + 4.0,
+                        right: (rect.x + rect.w) / ppp - 4.0,
+                        top: (rect.y + plot_h - band_dev) / ppp - 20.0,
+                    };
                     Some(h)
                 })
                 .collect()
@@ -883,17 +907,11 @@ impl Render for ChartPanel {
                     )
                 },
             ))
-            // Bot-style header readouts (Bv/Sv window block, 24h delta, session profit) per pane.
-            .children(vol_headers.into_iter().map(|h| {
+            // Bot-style header readouts (Bv/Sv window block, 24h delta, session profit) per
+            // pane, each in its configured slot.
+            .children(vol_headers.into_iter().flat_map(|h| {
                 let menu_open = self.vol_menu_pane == Some(h.pane);
-                super::vol_header::header_element(
-                    cx.entity(),
-                    h,
-                    vol_window,
-                    menu_open,
-                    palette,
-                    cx,
-                )
+                super::vol_header::header_overlays(cx.entity(), h, vol_view, menu_open, palette, cx)
             }))
             .children(news_card)
             .children(warn_card)

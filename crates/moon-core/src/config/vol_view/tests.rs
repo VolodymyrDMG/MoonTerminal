@@ -8,6 +8,9 @@ fn vol_view_roundtrip_preserves_every_field() {
     file.view.height = VOL_HEIGHT_L;
     file.view.cvd = false;
     file.view.window_secs = 300;
+    file.view.pos_vol = VOL_POS_BOTTOM_LEFT;
+    file.view.pos_delta = VOL_POS_HIDDEN;
+    file.view.pos_ses = VOL_POS_TOP_LEFT;
 
     let text = toml::to_string_pretty(&file).expect("serialize");
     let back: VolViewFile = toml::from_str(&text).expect("parse");
@@ -23,6 +26,10 @@ fn vol_view_partial_toml_fills_defaults() {
     assert_eq!(file.view.height, VOL_HEIGHT_S);
     assert!(file.view.cvd);
     assert_eq!(file.view.window_secs, 60);
+    // Pre-constructor files place the readouts exactly where the first release put them.
+    assert_eq!(file.view.pos_vol, VOL_POS_TOP_CENTER);
+    assert_eq!(file.view.pos_delta, VOL_POS_TOP_RIGHT);
+    assert_eq!(file.view.pos_ses, VOL_POS_TOP_RIGHT);
 
     let empty: VolViewFile = toml::from_str("").expect("empty parse");
     assert_eq!(empty.view, VolViewCfg::default());
@@ -59,4 +66,16 @@ fn vol_view_window_clamps() {
         cfg.window_secs = raw;
         assert_eq!(cfg.window_secs_clamped(), want, "raw {raw}");
     }
+}
+
+/// A stored placement byte past the last slot reads as hidden, not as a random corner.
+#[test]
+fn vol_view_position_bytes_clamp_to_hidden() {
+    assert_eq!(VolViewCfg::pos_clamped(VOL_POS_TOP_LEFT), VOL_POS_TOP_LEFT);
+    assert_eq!(
+        VolViewCfg::pos_clamped(VOL_POS_BOTTOM_RIGHT),
+        VOL_POS_BOTTOM_RIGHT
+    );
+    assert_eq!(VolViewCfg::pos_clamped(VOL_POS_HIDDEN), VOL_POS_HIDDEN);
+    assert_eq!(VolViewCfg::pos_clamped(200), VOL_POS_HIDDEN);
 }

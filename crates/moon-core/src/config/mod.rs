@@ -49,7 +49,11 @@ mod uid_counter;
 mod tests;
 
 pub use arb_view::{arb_default_color, ArbPlatformView, ArbViewCfg, ArbViewFile};
-pub use vol_view::{VolViewCfg, VolViewFile, VOL_HEIGHT_L, VOL_HEIGHT_M, VOL_HEIGHT_S};
+pub use vol_view::{
+    VolViewCfg, VolViewFile, VOL_HEIGHT_L, VOL_HEIGHT_M, VOL_HEIGHT_S, VOL_POS_BOTTOM_CENTER,
+    VOL_POS_BOTTOM_LEFT, VOL_POS_BOTTOM_RIGHT, VOL_POS_HIDDEN, VOL_POS_TOP_CENTER,
+    VOL_POS_TOP_LEFT, VOL_POS_TOP_RIGHT,
+};
 pub use badges::{BadgeEntry, BadgesConfig};
 pub use core_groups::{
     move_group, sanitize_core_groups, unique_group_name, CoreGroup, CORE_GROUPS_MAX,

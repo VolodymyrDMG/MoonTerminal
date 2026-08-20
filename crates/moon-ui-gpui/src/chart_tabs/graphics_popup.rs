@@ -245,6 +245,49 @@ fn render_graphics_popup<T: GraphicsPopupHost>(
         .text_size(design::t_caption(cx))
         .text_color(rgb(p.text_muted))
         .child(t!("chart.vol.hint").to_string());
+    // Placement constructor: a slot per header element — two bands × three anchors, plus
+    // hidden. Arrow glyphs need no dictionary entries and read the same in every language.
+    const VOL_POS_GLYPHS: [&str; 7] = ["↖", "↑", "↗", "↙", "↓", "↘", "—"];
+    let vol_pos_row = |key: &'static str,
+                       label: String,
+                       current: u8,
+                       write: fn(&mut moon_core::config::VolViewCfg, u8)| {
+        let entity = entity.clone();
+        let current = usize::from(moon_core::config::VolViewCfg::pos_clamped(current));
+        seg_row(
+            format!("{id}-{key}"),
+            label,
+            VOL_POS_GLYPHS
+                .iter()
+                .enumerate()
+                .map(|(index, g)| ((*g).to_string(), index == current))
+                .collect(),
+            26.0,
+            p,
+            cx,
+            move |ix, app| {
+                write_vol(&entity, app, |c| write(c, ix.min(6) as u8));
+            },
+        )
+    };
+    let vol_pos_vol_row = vol_pos_row(
+        "vol-pos-vol",
+        t!("chart.vol.pos_vol").to_string(),
+        vol.pos_vol,
+        |c, v| c.pos_vol = v,
+    );
+    let vol_pos_delta_row = vol_pos_row(
+        "vol-pos-delta",
+        t!("chart.vol.pos_delta").to_string(),
+        vol.pos_delta,
+        |c, v| c.pos_delta = v,
+    );
+    let vol_pos_ses_row = vol_pos_row(
+        "vol-pos-ses",
+        t!("chart.vol.pos_ses").to_string(),
+        vol.pos_ses,
+        |c, v| c.pos_ses = v,
+    );
 
     // Chrome is MoonPopover's; see `popover_contents_do_not_paint_a_second_surface`.
     v_flex()
@@ -296,6 +339,9 @@ fn render_graphics_popup<T: GraphicsPopupHost>(
                     .child(vol_enabled_cb)
                     .child(vol_height_row)
                     .child(vol_cvd_cb)
+                    .child(vol_pos_vol_row)
+                    .child(vol_pos_delta_row)
+                    .child(vol_pos_ses_row)
                     .child(vol_hint),
             ),
         )
