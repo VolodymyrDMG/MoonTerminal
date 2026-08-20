@@ -1,5 +1,5 @@
 //! Hover popup for one detection card: the parameters of the detected situation next to an
-//! enlarged frozen tick chart of the configured window (5/15/30 s) before the detection fired.
+//! enlarged frozen tick chart of the configured window (1/3/5 s) before the detection fired.
 //!
 //! The popup is a gpui tooltip built from [`HoverData`], a plain-data snapshot captured at
 //! card-render time, so the builder closure owns no panel borrow and outlives the frame. The chart

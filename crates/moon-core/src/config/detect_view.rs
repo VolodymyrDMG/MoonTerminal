@@ -247,9 +247,9 @@ pub struct DetectViewCfg {
     pub size: u8,
     /// Decimal places for deltas (Δ24h/Δ1h/Δ window), 0..=2 — ONE setting for all sizes.
     pub delta_decimals: u8,
-    /// Tick-chart window in seconds (1..=30 of the frozen 30-second trade snapshot) — ONE setting
+    /// Tick-chart window in seconds (1..=5 of the frozen 30-second trade snapshot) — ONE setting
     /// for all sizes, shared by the card chart, the Δ-window field, and the hover popup. The UI
-    /// offers 5/15/30; `0` means "unset" in old files and reads as the full 30.
+    /// offers 1/3/5; `0` ("unset" in old files) and the retired 15/30 presets read as 5.
     pub ticks_window_secs: u8,
     /// Card hover popup with detection parameters and the enlarged tick chart — ONE setting for
     /// all sizes. On by default; files from before this field read as enabled.
@@ -264,7 +264,7 @@ impl Default for DetectViewCfg {
         Self {
             size: DETECT_SIZE_MEDIUM,
             delta_decimals: 1,
-            ticks_window_secs: 30,
+            ticks_window_secs: 5,
             hover_popup: true,
             mini: default_mini(),
             medium: default_medium(),
@@ -284,11 +284,15 @@ impl DetectViewCfg {
         self.delta_decimals.min(2) as usize
     }
 
-    /// Tick-chart window in whole seconds, clamped to 1..=30; the legacy `0` reads as 30.
+    /// Tick-chart window in whole seconds, clamped to 1..=5.
+    ///
+    /// The legacy `0` ("unset") and any larger saved value — including the retired 15/30
+    /// presets every pre-1/3/5 file carries — read as the current maximum of 5, so old
+    /// configs land on an offered preset instead of an invisible selection.
     pub fn ticks_window_secs_clamped(&self) -> u32 {
         match self.ticks_window_secs {
-            0 => 30,
-            s => u32::from(s.min(30)),
+            0 => 5,
+            s => u32::from(s.min(5)),
         }
     }
 

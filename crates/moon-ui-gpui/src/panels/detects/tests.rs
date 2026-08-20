@@ -112,7 +112,7 @@ fn hover_tick_stats_split_sides_and_measure_first_to_last() {
 
 /// The gear popup's tick window trims the frozen rows to a SUFFIX: an exact `-window` boundary
 /// stays in, older rows drop out, and the window delta and volume measure the trimmed slice — so
-/// 5/15/30 answer "what happened in the last N seconds", not "since the snapshot began".
+/// 1/3/5 answer "what happened in the last N seconds", not "since the snapshot began".
 ///
 /// Mutation: filter with `<=` (boundary trade dropped), measure the full rows (window ignored),
 /// count one-trade windows as a 0% move instead of "—", or read an empty window as $0 turnover

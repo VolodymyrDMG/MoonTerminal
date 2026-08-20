@@ -50,7 +50,7 @@ const CHARTS: [(DetectChart, &str); 4] = [
 
 /// Tick-window choices in seconds — spans of the frozen 30-second trade snapshot, so 30 is the
 /// ceiling; one group-wide setting shared by the tick chart, the Δ-ticks field, and the hover.
-const TICK_WINS: [u8; 3] = [5, 15, 30];
+const TICK_WINS: [u8; 3] = [1, 3, 5];
 
 /// Returns the localization key for a slot-field label.
 fn field_key(f: DetectField) -> &'static str {

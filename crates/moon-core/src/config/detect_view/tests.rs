@@ -51,20 +51,21 @@ fn detect_view_partial_toml_fills_defaults() {
     // Everything else comes from the defaults.
     assert_eq!(cfg.mini, DetectViewCfg::default().mini);
     assert_eq!(cfg.medium.h, DetectViewCfg::default().medium.h);
-    assert_eq!(cfg.ticks_window_secs, 30);
+    assert_eq!(cfg.ticks_window_secs, 5);
     // Files from before the hover popup existed read as ENABLED, not silently off.
     assert!(cfg.hover_popup);
 }
 
-/// The tick window clamps to 1..=30 seconds, and the legacy `0` (files from before the field
-/// existed deserialize per-field, but a hand-edited zero is possible) reads as the full 30.
+/// The tick window clamps to 1..=5 seconds. The legacy `0` (a hand-edited zero or a file from
+/// before the field existed) and the retired 15/30 presets — which every file saved before the
+/// 1/3/5 row carries — all read as 5, so old configs land on an offered preset.
 #[test]
 fn detect_view_ticks_window_clamps() {
     let mut cfg = DetectViewCfg::default();
-    for (raw, want) in [(0u8, 30u32), (1, 1), (5, 5), (15, 15), (30, 30), (200, 30)] {
+    for (raw, want) in [(0u8, 5u32), (1, 1), (3, 3), (5, 5), (15, 5), (30, 5), (200, 5)] {
         cfg.ticks_window_secs = raw;
         assert_eq!(cfg.ticks_window_secs_clamped(), want, "raw {raw}");
     }
-    cfg.ticks_window_secs = 15;
-    assert_eq!(cfg.ticks_window_ms(), 15_000.0);
+    cfg.ticks_window_secs = 3;
+    assert_eq!(cfg.ticks_window_ms(), 3_000.0);
 }
