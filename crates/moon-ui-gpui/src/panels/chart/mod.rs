@@ -172,6 +172,9 @@ pub struct ChartPanel {
     /// Live volume-measure drag: `(pane, press time_rel, press x)`; the bracket itself is engine
     /// state and outlives the drag until the next band click clears it.
     vol_measure_drag: Option<(usize, f32, f32)>,
+    /// Cached real 24h delta per `(core, market)` with its computation stamp: the source walks
+    /// a day of history, so the render path refreshes each entry at most every 30 seconds.
+    day_delta_cache: std::collections::HashMap<(moon_core::session::CoreId, String), (Option<f64>, f64)>,
     /// Whether the panel is a Main-stack tile. The outer ScrollBox owns wheel events in this mode;
     /// fullscreen and numbered AddToChart or Custom panels retain normal chart zoom.
     main_stack_scroll: bool,
@@ -439,6 +442,7 @@ impl ChartPanel {
             scene_visible: false,
             vol_menu_pane: None,
             vol_measure_drag: None,
+            day_delta_cache: std::collections::HashMap::new(),
             main_stack_scroll: false,
             last_axis_notify_data_sig: u64::MAX,
             compare_eligible: false,
@@ -592,6 +596,7 @@ impl ChartPanel {
             scene_visible: false,
             vol_menu_pane: None,
             vol_measure_drag: None,
+            day_delta_cache: std::collections::HashMap::new(),
             main_stack_scroll: false,
             last_axis_notify_data_sig: u64::MAX,
             compare_eligible: false,

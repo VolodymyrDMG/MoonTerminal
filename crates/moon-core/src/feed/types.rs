@@ -1034,6 +1034,9 @@ pub enum FeedMsg {
     /// Core report/profit counters sent on `ProfitStateUpdated` — the bot's session ("Ses") and
     /// all-time profit totals from its report DB layer, resettable through `ResetProfit`.
     ProfitState(ProfitState),
+    /// Per-market accumulated session profit in quote currency (`total_profit_b+l+s`), sorted by
+    /// market, republished with the assets cadence only when a figure changed.
+    MarketProfits(Vec<(String, f64)>),
     /// Core account hedge mode for dual-side positions, sent on `HedgeModeUpdated`.
     HedgeMode(bool),
     /// Exchange API-key expiration for this core, sent on a successful

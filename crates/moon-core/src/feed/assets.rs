@@ -127,6 +127,24 @@ pub(super) fn to_exchange_kind(w: WalletKind) -> ExchangeKind {
 ///
 /// Empty markets are omitted, while dust filtering remains a UI concern. The global row also
 /// records whether its published free/total USD valuation is complete and finite.
+/// Per-market accumulated SESSION profit in quote currency: `total_profit_b + _l + _s` for
+/// every market carrying a non-zero sum. Unlike the assets rows this ignores balances and open
+/// positions entirely: a coin traded and fully closed this session keeps its figure — which is
+/// exactly what the chart header's per-market "Ses" chip asks about. Sorted for cheap equality
+/// against the previous publication.
+pub(super) fn collect_market_profits(markets: &MarketsState) -> Vec<(String, f64)> {
+    let mut out = Vec::new();
+    for h in markets.iter() {
+        let bp = h.balance_position();
+        let sum = bp.total_profit_b + bp.total_profit_l + bp.total_profit_s;
+        if sum != 0.0 && sum.is_finite() {
+            out.push((h.name().to_string(), sum));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
 pub(super) fn build_assets(
     markets: &MarketsState,
     balances: &BalancesState,

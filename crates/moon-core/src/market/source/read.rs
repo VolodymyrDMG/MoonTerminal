@@ -361,6 +361,85 @@ impl MarketDataSource {
         })
     }
 
+    /// Real 24-hour price change percent: the last price against the close nearest to 24 hours
+    /// ago, assembled from the same two history bases `detect_snapshot` trusts — the provider's
+    /// retained 5-minute snapshot and the local kline cache (real OHLC wins over the range-only
+    /// snapshot at the same age). For a market listed or first seen less than 24 hours ago the
+    /// reference is the OLDEST known close, the way exchanges quote fresh listings.
+    ///
+    /// This is NOT `MarketDeltaState::coin_24h_delta`: that bot metric is a deviation from a
+    /// retained daily average and reads a fraction of the classic day change (+0.8% on a coin
+    /// that did +13% — the report that motivated this method). `None` without a price or any
+    /// in-window history.
+    pub fn day_delta_pct(&self, core: CoreId, market: &str) -> Option<f64> {
+        let (client, kline_cache, exchange_key) = {
+            let inner = self.inner.read().expect("market source poisoned");
+            let provider = inner.core_provider.get(&core).copied()?;
+            let client = inner.clients.get(&provider).and_then(SharedMoonClient::get)?;
+            let exchange_key = inner
+                .provider_exchange
+                .get(&provider)
+                .map(|e| format!("{}:{:08x}", e.code, e.dex));
+            (client, inner.kline_cache.clone(), exchange_key)
+        };
+        let snapshot = client.snapshot_versioned()?;
+        let last = snapshot
+            .markets()
+            .price(market)
+            .map(|p| p.p_last)
+            .filter(|p| p.is_finite() && *p > 0.0)?;
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_millis() as i64);
+        let from_ms = now_ms - 24 * 3_600_000;
+        // Earliest usable close in the window; the kline cache carries real OHLC, so at equal
+        // age it wins over the snapshot's range-only rows (their close is the period low).
+        let mut ref_at = i64::MAX;
+        let mut ref_close: Option<f32> = None;
+        if let (Some(cache), Some(ex)) = (kline_cache.as_ref(), exchange_key.as_ref()) {
+            if let Some(c) = cache
+                .read_range(ex, market, 5, from_ms, now_ms)
+                .into_iter()
+                .find(|c| c.close.is_finite() && c.close > 0.0)
+            {
+                ref_at = c.t_open_ms as i64;
+                ref_close = Some(c.close);
+            }
+        }
+        if let Some(readers) = snapshot.market_history_readers(market) {
+            if let Some(candles) = readers.candles_5m {
+                let tf_ms = 5 * 60_000i64;
+                let mut best: Option<(i64, f32)> = None;
+                candles.with_last(288, |view| {
+                    view.for_each(|c| {
+                        let t = c.time().unix_millis() - tf_ms;
+                        let (_, _, _, close) = crate::market::candles::normalize_ohlc(
+                            c.open(),
+                            c.high(),
+                            c.low(),
+                            c.close(),
+                        );
+                        if t >= from_ms
+                            && close.is_finite()
+                            && close > 0.0
+                            && best.is_none_or(|(bt, _)| t < bt)
+                        {
+                            best = Some((t, close));
+                        }
+                    });
+                });
+                if let Some((t, close)) = best {
+                    // Strictly older only: at equal age the cache's real close stays.
+                    if t < ref_at.saturating_sub(tf_ms) {
+                        ref_close = Some(close);
+                    }
+                }
+            }
+        }
+        let reference = f64::from(ref_close?);
+        (reference > 0.0).then(|| (last / reference - 1.0) * 100.0)
+    }
+
     /// Build a frozen snapshot for a detection card.
     ///
     /// The snapshot contains the latest `bars` 5-minute OHLC candles, ordered oldest to newest,

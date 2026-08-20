@@ -125,6 +125,8 @@ pub struct CoreData {
     pub runtime_state: Option<RuntimeState>,
     /// Core report/profit counters (the bot's "Ses" figure), or `None` until they arrive.
     pub profit: Option<crate::feed::ProfitState>,
+    /// Per-market accumulated session profit in quote currency, keyed by market name.
+    pub market_profit: HashMap<String, f64>,
     /// Account hedge mode for dual-side positions, or `None` until the core responds.
     pub hedge_mode: Option<bool>,
     /// Exchange API-key expiration, or `None` while this core has never answered. A LATER failure
@@ -224,6 +226,7 @@ impl CoreData {
             lev_manage: None,
             runtime_state: None,
             profit: None,
+            market_profit: HashMap::new(),
             hedge_mode: None,
             api_expiry: None,
             engine_actions: VecDeque::new(),
@@ -444,6 +447,15 @@ impl CoreData {
             FeedMsg::ProfitState(profit) => {
                 if self.profit != Some(profit) {
                     self.profit = Some(profit);
+                    self.profit_rev = self.profit_rev.wrapping_add(1);
+                }
+            }
+            FeedMsg::MarketProfits(rows) => {
+                // The feed already deduplicates, but replacing wholesale keeps the map exactly
+                // the publication: a market whose figure went away (session reset) drops out.
+                let next: HashMap<String, f64> = rows.into_iter().collect();
+                if self.market_profit != next {
+                    self.market_profit = next;
                     self.profit_rev = self.profit_rev.wrapping_add(1);
                 }
             }

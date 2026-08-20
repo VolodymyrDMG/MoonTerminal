@@ -353,7 +353,9 @@ impl Render for ChartPanel {
                                 rows,
                                 rect.x / ppp + axis_off + 4.0,
                                 (rect.x + rect.w) / ppp,
-                                rect.y / ppp + 24.0,
+                                // ~1 cm down, in step with the header band: the top strip
+                                // belongs to the canvas caption plates of the live trade.
+                                rect.y / ppp + 64.0,
                             )
                         })
                     })
@@ -368,13 +370,36 @@ impl Render for ChartPanel {
         // clear of the corner pin/lock/close controls and put the bottom row just above the
         // volume zone (or the time axis when the zone is off).
         let vol_window = vol_view.window_secs_clamped();
+        // Real 24h deltas first, through the panel's 30-second cache: the source walks a day of
+        // history, and this needs `&mut self`, so it runs before the backend read below.
+        let day_deltas: Vec<(usize, Option<f64>)> = {
+            let src = self.backend.read(cx).session.market_source();
+            let now_ms = now_unix_ms();
+            let targets: Vec<(usize, moon_core::session::CoreId, String)> = axis_panes
+                .iter()
+                .filter_map(|(idx, _, _)| {
+                    self.chart.pane_target(*idx).map(|(c, m)| (*idx, c, m))
+                })
+                .collect();
+            targets
+                .into_iter()
+                .map(|(idx, core, market)| {
+                    (idx, self.day_delta_cached(&src, core, &market, now_ms))
+                })
+                .collect()
+        };
         let vol_headers: Vec<super::vol_header::VolHeader> = {
             let b = self.backend.read(cx);
             axis_panes
                 .iter()
                 .filter_map(|(idx, rect, _)| {
                     let (core, market) = self.chart.pane_target(*idx)?;
-                    let mut h = self.vol_header_data(&b, *idx, core, &market, vol_window);
+                    let delta = day_deltas
+                        .iter()
+                        .find(|(i, _)| i == idx)
+                        .and_then(|(_, d)| *d);
+                    let mut h =
+                        self.vol_header_data(&b, *idx, core, &market, vol_window, delta);
                     let time_axis_h = if self.time_axis_visible {
                         moon_chart::TIME_AXIS_H * ppp
                     } else {
@@ -390,10 +415,12 @@ impl Render for ChartPanel {
                     } else {
                         0.0
                     };
+                    // ~1 cm below the pane's top edge: the strip right at the top belongs to
+                    // the canvas caption plates (Сделки/Ордера/П&У of the live trade).
                     h.top = super::vol_header::BandRect {
                         left: rect.x / ppp + axis_off + 44.0,
                         right: (rect.x + rect.w) / ppp - 24.0,
-                        top: rect.y / ppp + 2.0,
+                        top: rect.y / ppp + 40.0,
                     };
                     h.bottom = super::vol_header::BandRect {
                         left: rect.x / ppp + axis_off + 4.0,

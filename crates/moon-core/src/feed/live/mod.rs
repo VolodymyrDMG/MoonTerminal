@@ -31,6 +31,7 @@ use moonproto::{
 };
 
 use super::assets::{build_assets, build_transfer_assets};
+use super::assets;
 use super::strategies::{
     alert_params, build_schema_model, fmt_field, schema_default_fields, strat_db_dump,
     strat_kind_name,
@@ -313,6 +314,8 @@ pub(super) fn run(
     // Assets snapshot rate cap: minimum 1 s between publishes while the Assets view is active,
     // otherwise 5 s. Publication still requires a domain event; this is not a periodic timer.
     let mut last_assets = Instant::now();
+    // Last published per-market session profits; the header chip republishes only on change.
+    let mut last_market_profits: Vec<(String, f64)> = Vec::new();
     // Coalesced repair requests for account changes that need a fresh balance or wallet snapshot,
     // plus the recurring API-key expiration poll.
     let mut account_reconciliation = AccountReconciliation::new(Instant::now());
@@ -1486,6 +1489,15 @@ pub(super) fn run(
                 let assets = build_assets(snap.markets(), snap.balances(), &base, futures_account);
                 if tx.send(FeedMsg::Assets(assets)).is_err() {
                     break;
+                }
+                // Per-market session profits for the chart header's "Ses" chip, published on the
+                // same cadence but only when a figure actually changed.
+                let profits = super::assets::collect_market_profits(snap.markets());
+                if profits != last_market_profits {
+                    last_market_profits = profits.clone();
+                    if tx.send(FeedMsg::MarketProfits(profits)).is_err() {
+                        break;
+                    }
                 }
             }
         }

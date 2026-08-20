@@ -53,10 +53,10 @@ pub(super) struct VolHeader {
     pub pane: usize,
     /// Buy/sell quote volume over the configured window, when the tape holds any.
     pub bvsv: Option<(f32, f32)>,
-    /// Signed 24-hour delta percent from the market's delta state (bot semantics: deviation
-    /// from the retained daily average), when the market resolves.
+    /// REAL signed 24-hour change percent (last vs the close ~24h ago) from
+    /// `MarketDataSource::day_delta_pct`, cached by the panel; `None` without history.
     pub delta_24h: Option<f64>,
-    /// Session profit in the core's quote currency, when the core has reported counters.
+    /// THIS market's accumulated session profit in its quote currency, when the core reports one.
     pub ses: Option<f64>,
     /// Top band: along the plot's top edge, clear of the corner pin/lock and close controls.
     pub top: BandRect,
@@ -75,13 +75,20 @@ fn signed_color(p: &MoonPalette, v: f64) -> u32 {
     }
 }
 
-fn mono(text: String, color: u32) -> AnyElement {
+fn mono(text: String, color: u32, fs: f32) -> AnyElement {
     MoonText::new(text)
         .color(color)
         .mono(true)
         .uppercase(false)
+        .font_size(fs)
         .render()
         .into_any_element()
+}
+
+/// Header font size in px: DOUBLE the ~11px caption these readouts launched with — the launch
+/// size was unreadable at trading distance (user report), and the bot draws its caption large.
+fn header_fs(cx: &App) -> f32 {
+    f32::from(design::ui_px(cx, 22.0))
 }
 
 /// The Bv/Sv block: window chip (with its anchored menu), per-side figures, net delta, and the
@@ -95,6 +102,7 @@ fn vol_block(
     p: MoonPalette,
     cx: &App,
 ) -> AnyElement {
+    let fs = header_fs(cx);
     let mut row = div()
         .id(SharedString::from(format!("vol-block-{pane}")))
         .flex()
@@ -121,8 +129,8 @@ fn vol_block(
             .rounded(design::ui_px(cx, 3.0))
             .cursor_pointer()
             .hover(|s| s.bg(rgba_from(p.panel_high, 0.9)))
-            .child(mono(window_label(window_secs), p.text))
-            .child(mono("▾".to_string(), p.text_soft))
+            .child(mono(window_label(window_secs), p.text, fs))
+            .child(mono("▾".to_string(), p.text_soft, fs))
             .on_click(move |_, _w, app| {
                 toggle.update(app, |this, cx| {
                     this.vol_menu_pane = if this.vol_menu_pane == Some(pane) {
@@ -137,8 +145,8 @@ fn vol_block(
             let mut menu = v_flex()
                 .absolute()
                 .left(px(0.0))
-                .top(px(17.0))
-                .w(px(64.0))
+                .top(px(32.0))
+                .w(px(96.0))
                 .gap(px(1.0))
                 .px(design::ui_px(cx, 3.0))
                 .py(design::ui_px(cx, 2.0))
@@ -158,7 +166,7 @@ fn vol_block(
                         .cursor_pointer()
                         .when(selected, |s| s.bg(rgba_from(p.blue, 0.35)))
                         .hover(|s| s.bg(rgba_from(p.blue, 0.5)))
-                        .child(mono(label.to_string(), p.text))
+                        .child(mono(label.to_string(), p.text, fs))
                         .on_click(move |_, _w, app| {
                             entity.update(app, |this, cx| {
                                 this.vol_menu_pane = None;
@@ -175,8 +183,8 @@ fn vol_block(
     if let Some((bv, sv)) = bvsv {
         let net = f64::from(bv) - f64::from(sv);
         row = row
-            .child(mono(format!("Bv {}", format_quote_short(bv)), p.green))
-            .child(mono(format!("Sv {}", format_quote_short(sv)), p.red))
+            .child(mono(format!("Bv {}", format_quote_short(bv)), p.green, fs))
+            .child(mono(format!("Sv {}", format_quote_short(sv)), p.red, fs))
             .child(mono(
                 format!(
                     "Δ {}{}",
@@ -184,16 +192,17 @@ fn vol_block(
                     format_quote_short(net.abs() as f32)
                 ),
                 signed_color(&p, net),
+                fs,
             ));
         // Pressure ratio bar: buys vs sells share of the window, the bot's square-vs-bar read.
         let total = bv + sv;
         if total > 0.0 {
-            const RATIO_W: f32 = 34.0;
+            const RATIO_W: f32 = 56.0;
             let buy_w = (RATIO_W * bv / total).clamp(1.0, RATIO_W - 1.0);
             row = row.child(
                 div()
                     .w(px(RATIO_W))
-                    .h(px(4.0))
+                    .h(px(7.0))
                     .rounded(px(1.0))
                     .flex()
                     .flex_row()
@@ -210,11 +219,11 @@ fn vol_block(
 fn chip(id: String, text: String, color: u32, p: MoonPalette, cx: &App) -> AnyElement {
     div()
         .id(SharedString::from(id))
-        .px(design::ui_px(cx, 4.0))
+        .px(design::ui_px(cx, 5.0))
         .py(px(1.0))
         .rounded(design::ui_px(cx, 3.0))
         .bg(rgba_from(p.surface, 0.4))
-        .child(mono(text, color))
+        .child(mono(text, color, header_fs(cx)))
         .into_any_element()
 }
 
@@ -336,8 +345,34 @@ impl ChartPanel {
         cx.notify();
     }
 
-    /// Resolve one pane's header figures from the engine tape, the market's delta state, and the
-    /// core's profit counters. Band geometry is filled by the caller, which owns the pane rects.
+    /// Refresh and read the cached REAL 24h delta for one `(core, market)`.
+    ///
+    /// `MarketDataSource::day_delta_pct` walks a day of 5-minute history, so the render path must
+    /// not call it per frame: each entry recomputes at most every 30 seconds, and a market
+    /// without data caches its `None` on the same clock instead of retrying every paint.
+    pub(super) fn day_delta_cached(
+        &mut self,
+        src: &moon_core::market::MarketDataSource,
+        core: CoreId,
+        market: &str,
+        now_ms: f64,
+    ) -> Option<f64> {
+        const TTL_MS: f64 = 30_000.0;
+        let key = (core, market.to_string());
+        if let Some((cached, at)) = self.day_delta_cache.get(&key) {
+            if now_ms - at < TTL_MS {
+                return *cached;
+            }
+        }
+        let fresh = src.day_delta_pct(core, market).filter(|d| d.is_finite());
+        self.day_delta_cache.insert(key, (fresh, now_ms));
+        fresh
+    }
+
+    /// Resolve one pane's header figures from the engine tape and the core's PER-MARKET session
+    /// profit (`total_profit_*` of exactly this market — a chart is one coin on one market, so
+    /// its "Ses" answers for that market, not for the whole core). The 24h delta arrives from
+    /// the caller's cache; band geometry is filled by the caller, which owns the pane rects.
     pub(super) fn vol_header_data(
         &self,
         b: &crate::Backend,
@@ -345,20 +380,14 @@ impl ChartPanel {
         core: CoreId,
         market: &str,
         window_secs: u32,
+        delta_24h: Option<f64>,
     ) -> VolHeader {
         let bvsv = self.chart.pane_volume_readout(idx, window_secs);
-        let delta_24h = b
-            .session
-            .market_source()
-            .market_ticker(core, market)
-            .map(|t| t.delta_24h_pct)
-            .filter(|d| d.is_finite());
         let ses = b
             .session
             .store()
             .core(core)
-            .and_then(|d| d.profit)
-            .map(|p| p.session_profit)
+            .and_then(|d| d.market_profit.get(market).copied())
             .filter(|s| s.is_finite());
         let empty = BandRect {
             left: 0.0,

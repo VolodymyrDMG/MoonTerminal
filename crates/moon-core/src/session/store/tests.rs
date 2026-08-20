@@ -266,7 +266,10 @@ fn profit_state_updates_bump_their_revision_once() {
     assert_eq!(core.profit_rev, 1);
 
     core.apply(FeedMsg::ProfitState(counters));
-    assert_eq!(core.profit_rev, 1, "an identical push must not churn consumers");
+    assert_eq!(
+        core.profit_rev, 1,
+        "an identical push must not churn consumers"
+    );
 
     core.apply(FeedMsg::ProfitState(crate::feed::ProfitState {
         session_profit: -3.0,
@@ -274,4 +277,37 @@ fn profit_state_updates_bump_their_revision_once() {
     }));
     assert_eq!(core.profit_rev, 2);
     assert_eq!(core.profit.unwrap().session_profit, -3.0);
+}
+
+/// `store.rs:CoreData::apply` replaces the per-market session-profit map wholesale — a market
+/// whose figure disappeared (session reset) must drop out — and bumps `profit_rev` only on a
+/// real change, so the header chip repaints on updates, not on every republication.
+#[test]
+fn market_profits_replace_wholesale_and_bump_once() {
+    let mut core = CoreData::new();
+
+    core.apply(FeedMsg::MarketProfits(vec![
+        ("BRUSDT".to_string(), 1.5),
+        ("CHIPUSDC".to_string(), -0.75),
+    ]));
+    assert_eq!(core.market_profit.get("BRUSDT"), Some(&1.5));
+    assert_eq!(core.market_profit.get("CHIPUSDC"), Some(&-0.75));
+    assert_eq!(core.profit_rev, 1);
+
+    core.apply(FeedMsg::MarketProfits(vec![
+        ("BRUSDT".to_string(), 1.5),
+        ("CHIPUSDC".to_string(), -0.75),
+    ]));
+    assert_eq!(
+        core.profit_rev, 1,
+        "an identical publication must not churn consumers"
+    );
+
+    core.apply(FeedMsg::MarketProfits(vec![("BRUSDT".to_string(), 2.0)]));
+    assert_eq!(core.profit_rev, 2);
+    assert_eq!(
+        core.market_profit.len(),
+        1,
+        "a reset market must drop out of the map"
+    );
 }

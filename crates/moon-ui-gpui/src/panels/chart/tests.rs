@@ -133,9 +133,11 @@ fn chart_header_readouts_stay_wired_from_config_to_overlay() {
     assert!(render.contains("super::vol_header::header_overlays"));
 
     let header = include_str!("vol_header.rs");
-    // 24h and Ses read the same sources the rest of the app trusts: the market's delta state
-    // through market_ticker, and the store's profit counters.
-    assert!(header.contains("market_ticker(core, market)"));
-    assert!(header.contains(".and_then(|d| d.profit)"));
-    assert!(header.contains("session_profit"));
+    // 24h must be the REAL day change (day_delta_pct behind the panel's 30s cache), NOT the
+    // bot's coin_24h_delta average-deviation — the +0.8%-on-a-+13%-coin regression. Ses must
+    // answer for THIS market from the per-market profit map, not for the whole core.
+    assert!(header.contains("day_delta_pct(core, market)"));
+    assert!(header.contains("const TTL_MS: f64 = 30_000.0;"));
+    assert!(header.contains(".and_then(|d| d.market_profit.get(market).copied())"));
+    assert!(render.contains("self.day_delta_cached(&src, core, &market, now_ms)"));
 }

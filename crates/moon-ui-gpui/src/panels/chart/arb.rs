@@ -117,7 +117,9 @@ pub(super) fn legend_element(
     p: MoonPalette,
     cx: &App,
 ) -> AnyElement {
-    const LEGEND_W: f32 = 128.0;
+    // Doubled with the header readouts: the launch-size rows were unreadable at trading
+    // distance (user report). The block widens with the font.
+    const LEGEND_W: f32 = 210.0;
     let x = if anchor_right {
         (right - LEGEND_W - 4.0).max(left)
     } else {
@@ -133,15 +135,18 @@ pub(super) fn legend_element(
         .py(design::ui_px(cx, 2.0))
         .rounded(design::ui_px(cx, 4.0))
         .bg(rgba_from(p.surface, 0.55));
+    let fs = f32::from(design::ui_px(cx, 22.0));
     for (i, row) in rows.into_iter().enumerate() {
         let name_text = MoonText::new(row.name.clone())
             .color(row.color)
             .mono(true)
-            .uppercase(false);
+            .uppercase(false)
+            .font_size(fs);
         let fig_text = MoonText::new(row.text.clone())
             .color(p.text_soft)
             .mono(true)
-            .uppercase(false);
+            .uppercase(false)
+            .font_size(fs);
         let mut line = div()
             .id(SharedString::from(format!("arb-row-{}-{}", src.0, i)))
             .flex()
