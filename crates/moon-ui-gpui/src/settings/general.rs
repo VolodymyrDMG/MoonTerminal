@@ -240,11 +240,12 @@ impl SettingsView {
     pub(super) fn general_tab(&self, cx: &Context<Self>) -> impl IntoElement {
         let p = MoonPalette::active(cx);
         let muted = rgba_from(p.text_muted, 1.0);
-        let (split, scz, idle_secs, logf, ret) = {
+        let (split, auto_activate, scz, idle_secs, logf, ret) = {
             let b = self.backend.read(cx);
             let d = b.preview.as_ref().unwrap_or(&b.config);
             (
                 d.charts_split_by_core,
+                d.charts_auto_activate,
                 d.separate_control_zones,
                 d.main_idle_close_secs,
                 d.log_to_file,
@@ -331,6 +332,21 @@ impl SettingsView {
                 .label(t!("general.charts_split_by_core").to_string()),
                 "general.charts_split_by_core_hint",
                 &t!("general.charts_split_by_core_hint"),
+            ))
+            .child(super::separator(p, cx))
+            // FORK: switch the chart panel to the AddToChart tab when a flagged detect arrives.
+            .child(checkbox_with_hint(
+                self.draft_checkbox(cx, "auto-activate", auto_activate, |p, v| {
+                    if p.charts_auto_activate != v {
+                        p.charts_auto_activate = v;
+                        true
+                    } else {
+                        false
+                    }
+                })
+                .label(t!("general.charts_auto_activate").to_string()),
+                "general.charts_auto_activate_hint",
+                &t!("general.charts_auto_activate_hint"),
             ))
             .child(super::separator(p, cx))
             // Grant chart panning inside the order-book zone; order gestures stay in that zone.

@@ -1,0 +1,89 @@
+# FORK-ONLY (VolodymyrDMG): macOS .dmg for feature-branch tags.
+#
+# Upstream v0.24 split CI in two: `build` ships only the Windows .exe plus tests, and the
+# universal macOS .dmg moved into `release.yml` — whose first job requires a canonical
+# `vX.Y.Z` tag on `main` and whose publish step needs the upstream-only RELEASE_ADMIN_TOKEN.
+# A fork tag like `v0.25-move.18` therefore builds no macOS binary at all.
+#
+# This workflow restores the old fork flow end to end: every `v*-move*` tag builds a
+# universal MoonTerminal.dmg and PUBLISHES it as a GitHub Release on that tag — the same
+# place the pre-v0.24 release.yml put it (softprops + the default GITHUB_TOKEN, no
+# upstream secrets), so the download lives on the fork's Releases page as before. The
+# build body mirrors the `macos` job of release.yml — two cross-built slices lipo-joined
+# by make-dmg.sh — so a future upstream change is a copy-paste refresh here. The dmg is
+# also kept as a run artifact as a fallback. Not for upstream pull requests.
+name: fork-dmg
+
+on:
+  push:
+    tags: ["v*-move*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # required to create the GitHub Release
+
+concurrency:
+  group: fork-dmg-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: macOS .dmg (universal, fork artifact)
+    runs-on: macos-14
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
+      - name: Build release binary (Apple Silicon)
+        run: cargo build -p moon-ui-gpui --bin moonterminal --release --locked --target aarch64-apple-darwin
+      - name: Stage the Apple Silicon slice and free its target dir
+        run: |
+          mkdir -p stage
+          mv target/aarch64-apple-darwin/release/moonterminal stage/moonterminal-arm64
+          rm -rf target/aarch64-apple-darwin
+      - name: Build release binary (Intel)
+        run: cargo build -p moon-ui-gpui --bin moonterminal --release --locked --target x86_64-apple-darwin
+      - name: Stage the Intel slice and free the whole build tree
+        # Both slices now live in stage/, so nothing below needs target/ — and the fork build
+        # carries MORE on this 14 GB runner than upstream's release.yml does (cargo holds TWO
+        # MoonUI git mirrors: Moonbot-Tech and the patched fork). Without this sweep, hdiutil
+        # hits "No space left on device" at the very end (fork-dmg run #3).
+        run: |
+          mv target/x86_64-apple-darwin/release/moonterminal stage/moonterminal-x86_64
+          rm -rf target
+      - name: Package .app + .dmg
+        # v0.26's make-dmg.sh validates CFBundleVersion as strictly numeric X.Y[.Z] and takes it
+        # positionally; the bare fork tag ("0.26-move.24") now fails that check — run #6 died
+        # here with "refusing to bundle a non-numeric CFBundleVersion". Map vA.B[-.C]-move.N to
+        # A.B.N so the bundle version stays real and monotonic per move; anything else (e.g. a
+        # workflow_dispatch run on a branch) falls back to 0.0.0, same as upstream manual runs.
+        run: |
+          ref="${GITHUB_REF_NAME#v}"
+          if [[ "$ref" =~ ^([0-9]+)\.([0-9]+)(\.[0-9]+)?-move\.([0-9]+)$ ]]; then
+            ver="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[4]}"
+          else
+            ver="0.0.0"
+          fi
+          bash .github/scripts/make-dmg.sh "$ver"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: MoonTerminal-${{ github.run_number }}
+          path: dist/MoonTerminal.dmg
+          if-no-files-found: error
+      # The Releases page is where every pre-v0.24 fork dmg lived; keep that habit working.
+      # Guarded to tag pushes: a manual workflow_dispatch run has no tag to attach to.
+      - name: Publish fork release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: dist/MoonTerminal.dmg

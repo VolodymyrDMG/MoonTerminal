@@ -920,7 +920,7 @@ pub(super) fn mouse_down_middle(
 pub(super) fn mouse_move(
     this: &mut ChartPanel,
     e: &MouseMoveEvent,
-    _window: &mut Window,
+    window: &mut Window,
     cx: &mut Context<ChartPanel>,
 ) {
     if cx.has_active_drag() {
@@ -1026,6 +1026,19 @@ pub(super) fn mouse_move(
         e.pressed_button == Some(MouseButton::Left),
         e.pressed_button == Some(MouseButton::Right),
     );
+    // A held button that traveled is a DRAG, not the first half of a double click: break the
+    // panel's click series, or the release of a pan/line drag would pair with the next quick
+    // press and trade (the pair check no longer requires the same spot — see click_series.rs).
+    {
+        let origin = window.bounds().origin;
+        this.click_series.drag_beyond(
+            (
+                f32::from(origin.x + e.position.x),
+                f32::from(origin.y + e.position.y),
+            ),
+            6.0,
+        );
+    }
     if this.fig_drag.is_some() {
         this.update_fig_pointer(pos, within, true, e.modifiers.secondary(), cx);
         cx.stop_propagation();

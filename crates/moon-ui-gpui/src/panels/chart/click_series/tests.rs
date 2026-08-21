@@ -52,13 +52,36 @@ fn a_stale_observation_does_not_absorb_a_stranger_press() {
     );
 }
 
+/// FORK: the pair deliberately survives DISTANCE — the trader places the order with two clicks
+/// in different spots, at the second one — and it also survives the platform resetting its own
+/// count over that distance (the second press arrives with native 1 again).
 #[test]
-fn a_press_somewhere_else_does_not_extend_the_series() {
+fn a_press_somewhere_else_still_extends_the_series() {
     let mut series = ClickSeries::default();
     series.observe(MouseButton::Left, 1, 0.0, SPOT);
     assert_eq!(
-        series.observe(MouseButton::Left, 2, SOON_MS, (SPOT.0 + 200.0, SPOT.1)),
-        1
+        series.observe(MouseButton::Left, 1, SOON_MS, (SPOT.0 + 200.0, SPOT.1)),
+        2,
+        "two quick clicks apart on this chart are the order pair"
+    );
+}
+
+/// A drag between the presses breaks the pair: the release of a pan is not click one of a trade.
+#[test]
+fn a_drag_between_presses_breaks_the_pair() {
+    let mut series = ClickSeries::default();
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
+    series.drag_beyond((SPOT.0 + 40.0, SPOT.1), 6.0);
+    assert_eq!(
+        series.observe(MouseButton::Left, 1, SOON_MS, (SPOT.0 + 40.0, SPOT.1)),
+        1,
+        "a pan's travel must reset the series before its release can pair"
+    );
+    // Motion inside the threshold is a hand tremor, not a drag.
+    series.drag_beyond((SPOT.0 + 42.0, SPOT.1), 6.0);
+    assert_eq!(
+        series.observe(MouseButton::Left, 1, SOON_MS + SOON_MS, (SPOT.0 + 44.0, SPOT.1)),
+        2
     );
 }
 
@@ -72,14 +95,6 @@ fn the_series_resumes_from_the_presses_this_panel_saw() {
         2,
         "two presses in a row on this chart are its own double click, whatever preceded them"
     );
-}
-
-#[test]
-fn a_press_the_panel_missed_breaks_the_series() {
-    let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT);
-    // Native count 3 means the panel never received press two.
-    assert_eq!(series.observe(MouseButton::Left, 3, SOON_MS, SPOT), 1);
 }
 
 #[test]

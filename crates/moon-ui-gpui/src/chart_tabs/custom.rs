@@ -293,6 +293,33 @@ impl ChartTabs {
             return;
         }
         let coins: Vec<(CoreId, String)> = self.coin_selected.iter().cloned().collect();
+        self.open_pairs_in_new_tab(coins, cx);
+        // Clear the selection, field, and popup.
+        self.coin_selected.clear();
+        self.coin_query.clear();
+        self.close_chart_popup(ChartPopup::Coin, cx);
+    }
+
+    /// Build one custom tab from explicit `(core, market)` pairs and make it active.
+    ///
+    /// The shared tail of "Open in new tab" and the arbitrage legend's venue click: the multi
+    /// path prunes and clears the accumulated SELECTION around this, while a single-pair caller
+    /// has no selection to touch.
+    ///
+    /// Args:
+    ///     coins: Pairs to open, one chart each; empty opens nothing.
+    ///     cx: ChartTabs context used to build the tab and persist it.
+    ///
+    /// Returns:
+    ///     Nothing; the new tab becomes the active tab.
+    pub(super) fn open_pairs_in_new_tab(
+        &mut self,
+        coins: Vec<(CoreId, String)>,
+        cx: &mut Context<Self>,
+    ) {
+        if coins.is_empty() {
+            return;
+        }
         let num = self.next_custom_num;
         self.next_custom_num += 1;
         let label = t!("chart.tab.custom", n = num - CUSTOM_NUM_BASE + 1).to_string();

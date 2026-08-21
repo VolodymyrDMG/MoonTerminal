@@ -178,6 +178,8 @@ impl DetectsPanel {
             }
             self.items.push_back(DetectItem {
                 origin,
+                // FORK: a crowd row detects nothing on a core, so it has no frozen tick tape.
+                ticks: std::sync::Arc::new(Vec::new()),
                 // No core reported it, and the badge names the source at render instead.
                 core_name: String::new(),
                 market,

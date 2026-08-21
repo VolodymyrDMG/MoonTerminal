@@ -18,6 +18,9 @@ pub(super) struct AlertParams {
     /// Chart-tab number (0 means do not add).
     pub add_to_chart: u32,
     pub keep_in_chart_secs: u32,
+    /// FORK: open the coin's chart on signal — Moonbot `SilentNoCharts` inverted. The `Default`
+    /// (false = do not open) covers detects without a strategy snapshot.
+    pub open_chart: bool,
     /// The sound the strategy names, as a lowercase WAV stem (`babytoy`, `ding1`, or a user's own
     /// file), or `None` for silence. Taken from the `SoundKind` field, which is what Moonbot calls
     /// it in every snapshot on record; folder prefixes are ignored for playback, and the player, not
@@ -53,26 +56,28 @@ fn sound_kind_of(s: &StrategySnapshot) -> Option<Option<String>> {
     }
 }
 
-/// Reads alert defaults `(SoundAlert, sound)` from the SCHEMA for a strategy kind.
-/// The server does NOT send fields equal to their schema defaults (as with all other strategy
-/// fields), so a strategy using the DEFAULT sound arrives without a sound field and cannot be
-/// found in the snapshot. Read it from this kind's schema-field `default_value`s.
+/// Reads alert defaults `(SoundAlert, SilentNoCharts, sound)` from the SCHEMA for a strategy
+/// kind. The server does NOT send fields equal to their schema defaults (as with all other
+/// strategy fields), so a strategy using the DEFAULT sound arrives without a sound field and
+/// cannot be found in the snapshot. Read it from this kind's schema-field `default_value`s.
 fn schema_alert_defaults(
     schema: &StrategySchema,
     s: &StrategySnapshot,
-) -> (Option<bool>, Option<String>) {
+) -> (Option<bool>, Option<bool>, Option<String>) {
     let mut sound_alert = None;
+    let mut silent_no_charts = None;
     let mut sound = None;
     for sec in schema.editor_sections_for_strategy_kind(s.kind()) {
         for f in &sec.fields {
             match (f.name.as_str(), f.default_value.as_ref()) {
                 ("SoundAlert", Some(FieldValue::Bool(b))) => sound_alert = Some(*b),
+                ("SilentNoCharts", Some(FieldValue::Bool(b))) => silent_no_charts = Some(*b),
                 (SOUND_KIND_FIELD, Some(FieldValue::String(sv))) => sound = sound_stem(sv),
                 _ => {}
             }
         }
     }
-    (sound_alert, sound)
+    (sound_alert, silent_no_charts, sound)
 }
 
 /// An integer out of one field value, accepting ANY numeric or boolean moonproto type.
@@ -148,15 +153,22 @@ fn field_secs_or(
 }
 
 pub(super) fn alert_params(s: &StrategySnapshot, schema: Option<&StrategySchema>) -> AlertParams {
-    let (def_sound_alert, def_sound) = schema
+    let (def_sound_alert, def_silent_no_charts, def_sound) = schema
         .map(|sc| schema_alert_defaults(sc, s))
-        .unwrap_or((None, None));
+        .unwrap_or((None, None, None));
     // SoundAlert: use the snapshot value when present. Absence means `equal to the schema
     // default` (the server omits such values), so use the schema default.
     let sound_alert = if s.fields.get("SoundAlert").is_some() {
         s.field_bool_or_false("SoundAlert")
     } else {
         def_sound_alert.unwrap_or(false)
+    };
+    // SilentNoCharts, same resolution order. With neither a snapshot value nor a schema default,
+    // read it as SILENT (no chart): opening charts on a guess would yank the user around.
+    let silent_no_charts = if s.fields.get("SilentNoCharts").is_some() {
+        s.field_bool_or_false("SilentNoCharts")
+    } else {
+        def_silent_no_charts.unwrap_or(true)
     };
     // Play EXACTLY the sound selected by the strategy:
     //  - an explicit stem in the snapshot wins;
@@ -179,6 +191,8 @@ pub(super) fn alert_params(s: &StrategySnapshot, schema: Option<&StrategySchema>
         // Through the schema: 0 here means keep the chart in the tab INDEFINITELY, Moonbot's
         // meaning, not "zero seconds" — and 0 is the schema default, so the field never arrives.
         keep_in_chart_secs: field_secs_or(s, schema, "KeepInChart", 60),
+        // FORK: SilentNoCharts=NO means the detect wants its coin OPENED on the chart.
+        open_chart: !silent_no_charts,
         sound_name,
     }
 }
