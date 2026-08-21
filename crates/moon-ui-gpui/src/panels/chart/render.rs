@@ -68,6 +68,7 @@ impl Render for ChartPanel {
         let (
             theme,
             orders_style,
+            vol_view,
             follow,
             prospective_usd,
             candle_view,
@@ -115,6 +116,7 @@ impl Render for ChartPanel {
             (
                 theme,
                 orders,
+                b.vol_view.view,
                 b.follow,
                 prospective,
                 candle_view,
@@ -131,6 +133,7 @@ impl Render for ChartPanel {
         // detached-window header, rather than the global backend.price_scale.
         let mut settings_changed = self.chart.set_theme(theme)
             | self.chart.set_orders(orders_style)
+            | self.chart.set_vol_view(vol_view)
             | self.chart.set_scale(self.scale)
             | self.chart.set_orderbook_enabled(self.orderbook_enabled)
             | self

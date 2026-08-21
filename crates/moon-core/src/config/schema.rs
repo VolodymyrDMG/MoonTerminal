@@ -311,6 +311,10 @@ pub struct SettingsFile {
     /// one 1-HL tab. Older files default to true.
     #[serde(default = "servers::default_true")]
     pub charts_split_by_core: bool,
+    /// Switch the chart panel to the AddToChart tab when a detect with `AddToChart > 0` arrives.
+    /// Defaults to false: a detect must not pull the user to a chart unless asked to.
+    #[serde(default)]
+    pub charts_auto_activate: bool,
     /// An AddToChart tab with multiple charts: true enables vertical scrolling with fixed chart
     /// heights; false divides the window height as before. Older files default to false.
     #[serde(default)]

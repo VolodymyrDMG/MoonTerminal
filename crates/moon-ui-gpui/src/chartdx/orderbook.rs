@@ -180,7 +180,7 @@ impl OrderBookLayer {
                 volume_buy_inv: 0.0,
                 volume_sell_inv: 0.0,
                 volume_alpha: 0.0,
-                _pad2: 0.0,
+                volume_band_px: 0.0,
             };
             update_dynamic(context, &pipe.view_cb, &[bake_view]);
             update_dynamic(context, &pipe.style_cb, &[*style]);

@@ -16,14 +16,14 @@ use moon_ui::{
 use rust_i18n::t;
 
 use moon_core::config::{
-    DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart, DetectField,
-    DetectViewCfg, detect_slot_count,
+    detect_slot_count, DetectChart, DetectField, DetectViewCfg, DETECT_SIZE_LARGE,
+    DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI,
 };
 
-use super::{DetectsPanel, cards};
+use super::{cards, DetectsPanel};
 use crate::design;
 use crate::panels::{
-    POPUP_GROUP_INSET, RadioMark, popup_close_button, popup_group, popup_title, radio_items,
+    popup_close_button, popup_group, popup_title, radio_items, RadioMark, POPUP_GROUP_INSET,
 };
 
 /// Popup width in logical pixels: three large-slot columns (76-pixel dropdown plus three 20-pixel
@@ -41,11 +41,16 @@ const TABS: [(u8, &str); 3] = [
 ];
 
 /// Chart types as `(value, localization key)` pairs.
-const CHARTS: [(DetectChart, &str); 3] = [
+const CHARTS: [(DetectChart, &str); 4] = [
     (DetectChart::None, "detects.cfg.chart_none"),
     (DetectChart::Candles, "detects.cfg.chart_candles"),
     (DetectChart::Line, "detects.cfg.chart_line"),
+    (DetectChart::Ticks, "detects.cfg.chart_ticks"),
 ];
+
+/// Tick-window choices in seconds — spans of the frozen 30-second trade snapshot, so 30 is the
+/// ceiling; one group-wide setting shared by the tick chart and the Δ-ticks field.
+const TICK_WINS: [u8; 3] = [1, 3, 5];
 
 /// Returns the localization key for a slot-field label.
 fn field_key(f: DetectField) -> &'static str {
@@ -57,6 +62,8 @@ fn field_key(f: DetectField) -> &'static str {
         DetectField::Core => "detects.view.core",
         DetectField::Delta24h => "detects.field.d24",
         DetectField::Delta1h => "detects.field.d1",
+        DetectField::DeltaWin => "detects.field.dwin",
+        DetectField::VolWin => "detects.field.vwin",
         DetectField::Exchange => "detects.view.exchange",
         DetectField::ExchangeKind => "detects.view.exchange_kind",
         DetectField::Strategy => "detects.field.strategy",
@@ -465,6 +472,28 @@ fn content(
             }
         })
         .render();
+    // The tick window is group-wide (like delta decimals), but it lives on the chart row because
+    // that is where the "Ticks" mode it windows is chosen.
+    let entity_win = entity.clone();
+    let cur_win = cfg.ticks_window_secs_clamped();
+    let win_seg = MoonSegmentedControl::new("det-view-tick-win")
+        .accent(MoonAccent::Blue)
+        .items(TICK_WINS.iter().map(|s| {
+            let mut it = MoonSegmentItem::new("", format!("{s}")).width(30.0);
+            if u32::from(*s) == cur_win {
+                it = it.selected(true);
+            }
+            it
+        }))
+        .on_click(move |ix, _, _w, app| {
+            if let Some(s) = TICK_WINS.get(ix) {
+                let s = *s;
+                entity_win.update(app, |this, cx| {
+                    this.write_view(cx, |c| c.ticks_window_secs = s);
+                });
+            }
+        })
+        .render();
     let chart_row = h_flex()
         .w_full()
         .items_center()
@@ -477,7 +506,17 @@ fn content(
                 .text_color(rgb(p.text))
                 .child(t!("detects.cfg.chart").to_string()),
         )
-        .child(chart_seg);
+        .child(chart_seg)
+        .child(div().flex_1())
+        .child(
+            div()
+                .text_size(design::t_caption(cx))
+                .text_color(rgb(p.text_muted))
+                .mr(design::ui_px(cx, 5.0))
+                .child(t!("detects.cfg.ticks_win").to_string()),
+        )
+        .child(win_seg);
+
 
     // Server rail: swatch caption plus width and gradient sliders.
     let rail_caption = h_flex()
@@ -580,7 +619,7 @@ fn content(
                     .gap(design::ui_px(cx, 6.0))
                     .child(w_row)
                     .child(h_row)
-                    .child(chart_row),
+                    .child(chart_row)
             ),
         )
         .child(

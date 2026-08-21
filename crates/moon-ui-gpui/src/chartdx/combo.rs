@@ -332,7 +332,7 @@ impl ComboLayer {
             volume_buy_inv: 1.0 / self.volume_buy_max.max(1e-6),
             volume_sell_inv: 1.0 / self.volume_sell_max.max(1e-6),
             volume_alpha: view.volume_alpha,
-            _pad2: 0.0,
+            volume_band_px: 0.0,
         };
         update_dynamic(context, &pipe.view_cb, &[bake_view]);
         let tex_vp = D3D11_VIEWPORT {

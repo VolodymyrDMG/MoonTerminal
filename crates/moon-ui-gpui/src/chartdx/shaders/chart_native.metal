@@ -13,7 +13,7 @@ struct ChartView {
     float volume_buy_inv;
     float volume_sell_inv;
     float volume_alpha;
-    float _pad2;
+    float volume_band_px;
 };
 
 struct BackgroundParams {
@@ -484,18 +484,26 @@ vertex VolumeOut volume_vertex(uint vid [[vertex_id]], uint iid [[instance_id]],
                                constant ChartView& cv [[buffer(0)]],
                                const device Cross* crosses [[buffer(1)]]) {
     Cross c = crosses[iid];
+    float band = cv.volume_band_px;
     float sx = cv.bounds.x + (c.time_rel - cv.view_time0) * cv.time_to_px;
-    // side>=2 (liquidations) do not draw a volume bar, so cull them from this pass. They are
-    // also excluded from the volume SCALE, so a bar here would be normalised against a maximum
-    // it never contributed to and would clamp at full band height.
-    if (sx < cv.bounds.x - 2.0 || sx > cv.bounds.x + cv.bounds.z + 2.0 || c.qty <= 0.0 || c.side >= 2) {
+    // side>=2 (liquidations) do not draw a volume bar, so cull them from this pass; a zero
+    // band (the master switch off) culls everything.
+    if (band <= 0.5 || sx < cv.bounds.x - 2.0 || sx > cv.bounds.x + cv.bounds.z + 2.0 ||
+        c.qty <= 0.0 || c.side >= 2) {
         return { float4(2.0, 2.0, 0.0, 1.0), 0 };
     }
-    float inv = c.side == 0 ? cv.volume_buy_inv : cv.volume_sell_inv;
-    float h = max(1.0, sqrt(saturate(c.qty * inv)) * min(cv.bounds.w * 0.18, 72.0));
     float base = cv.bounds.y + cv.bounds.w - 1.0;
-    float bar_w = clamp(cv.time_to_px * 0.35, 1.0, 3.0);
-    float2 px = float2(round(sx) - bar_w * 0.5, base - h) + CORNERS_01[vid] * float2(bar_w, h);
+    // Half-second pair columns: each instance is one SIDE of a 500 ms bucket, centered on its
+    // quarter (buys) or three-quarter (sells) point by the resampler. `price` carries the
+    // half-bucket width in milliseconds, so the column fills its share of the bucket at any
+    // zoom — wide honest slabs zoomed in, hairlines zoomed out — instead of a fixed stick.
+    float bar_w = max(1.0, c.price * cv.time_to_px * 0.78);
+    float inv = c.side == 0 ? cv.volume_buy_inv : cv.volume_sell_inv;
+    // Heights map linearly to the visible-window maximum: the tallest visible bucket side
+    // touches the band top (below the ceiling by the CPU-side headroom) and every other height
+    // is its true fraction of that. The band height arrives via volume_band_px (vol_view.toml).
+    float h = max(1.0, saturate(c.qty * inv) * band);
+    float2 px = float2(round(sx - bar_w * 0.5), base - h) + CORNERS_01[vid] * float2(bar_w, h);
     return { to_clip(px, cv.resolution), c.side };
 }
 

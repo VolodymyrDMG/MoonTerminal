@@ -233,6 +233,11 @@ fn popover_contents_do_not_paint_a_second_surface() {
             "panels/detects/popup.rs",
             r#".id("detects-view-popup")"#,
         ),
+        (
+            "chart_tabs/arb_popup.rs",
+            "chart_tabs/arb_popup.rs",
+            r#".id("chart-arb-popup")"#,
+        ),
         // The header's quiet-mode ("sleep") gear. Declared beside the toggle in `chrome/quiet.rs`,
         // built on Shell because its time fields are retained `MoonInputState` entities.
         (
