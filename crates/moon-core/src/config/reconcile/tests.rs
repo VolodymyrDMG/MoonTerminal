@@ -1,5 +1,5 @@
 use super::super::schema::{
-    default_ui_font_delta, default_ui_scale, ServersFile, SettingsFile, SCHEMA_VERSION,
+    SCHEMA_VERSION, ServersFile, SettingsFile, default_ui_font_delta, default_ui_scale,
 };
 use super::{merge, split, Merged};
 use crate::config::{CoreGroup, GroupConfig, DEFAULT_ORDER_SIZES_USD};
@@ -252,6 +252,7 @@ fn a_clean_core_group_list_round_trips_through_merge_and_split() {
         merged.language,
         merged.market_mode,
         merged.charts_split_by_core,
+        merged.charts_auto_activate,
         merged.charts_stack_scroll,
         merged.charts_stack_compress,
         merged.chart_stack_height,
@@ -272,4 +273,22 @@ fn a_clean_core_group_list_round_trips_through_merge_and_split() {
         split_settings.core_groups, groups,
         "split must carry the merged groups through unchanged"
     );
+}
+
+/// `charts_auto_activate` flows file → merge → runtime, and an old settings.toml without the
+/// field reads as OFF: silently upgrading everyone to tab-stealing charts would be hostile.
+#[test]
+fn charts_auto_activate_merges_and_defaults_off() {
+    let old: SettingsFile = toml::from_str("version = 1").expect("legacy settings parse");
+    assert!(
+        !old.charts_auto_activate,
+        "files from before the field must stay quiet"
+    );
+
+    let on = SettingsFile {
+        version: SCHEMA_VERSION,
+        charts_auto_activate: true,
+        ..Default::default()
+    };
+    assert!(merge(ServersFile::default(), on, None).charts_auto_activate);
 }

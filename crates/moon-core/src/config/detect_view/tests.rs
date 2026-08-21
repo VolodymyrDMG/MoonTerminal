@@ -9,12 +9,14 @@ fn detect_view_roundtrip_preserves_every_field() {
     cfg.size = DETECT_SIZE_LARGE;
     cfg.delta_decimals = 0;
     cfg.show_add_to_chart = true;
+    cfg.ticks_window_secs = 3;
     cfg.mini.w = 77;
     cfg.mini.h = 33;
     cfg.mini.chart = DetectChart::Line;
     cfg.mini.rail_w = 5;
     cfg.mini.rail_grad = 61;
     cfg.medium.chart = DetectChart::None;
+    cfg.large.chart = DetectChart::Ticks;
     for (i, slot) in cfg.large.slots.iter_mut().enumerate() {
         slot.field = DetectField::ALL[i % DetectField::ALL.len()];
         slot.over = i % 2 == 0;
@@ -52,6 +54,21 @@ fn detect_view_partial_toml_fills_defaults() {
     // Everything else comes from the defaults.
     assert_eq!(cfg.mini, DetectViewCfg::default().mini);
     assert_eq!(cfg.medium.h, DetectViewCfg::default().medium.h);
+    assert_eq!(cfg.ticks_window_secs, 5);
+}
+
+/// The tick window clamps to 1..=5 seconds: the legacy `0` (a hand-edited zero or a file from
+/// before the field existed) and any larger stored value read as 5, so every config lands on an
+/// offered preset.
+#[test]
+fn detect_view_ticks_window_clamps() {
+    let mut cfg = DetectViewCfg::default();
+    for (raw, want) in [(0u8, 5u32), (1, 1), (3, 3), (5, 5), (15, 5), (30, 5), (200, 5)] {
+        cfg.ticks_window_secs = raw;
+        assert_eq!(cfg.ticks_window_secs_clamped(), want, "raw {raw}");
+    }
+    cfg.ticks_window_secs = 3;
+    assert_eq!(cfg.ticks_window_ms(), 3_000.0);
 }
 
 /// EVERY assignable field survives the share round trip, independent of how many slots a size has.

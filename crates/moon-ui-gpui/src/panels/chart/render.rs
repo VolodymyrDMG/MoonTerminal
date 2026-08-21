@@ -136,6 +136,7 @@ impl Render for ChartPanel {
         let (
             theme,
             orders_style,
+            vol_view,
             follow,
             prospective_usd,
             candle_view,
@@ -178,6 +179,7 @@ impl Render for ChartPanel {
             (
                 theme,
                 orders,
+                b.vol_view.view,
                 b.follow,
                 prospective,
                 candle_view,
@@ -193,6 +195,7 @@ impl Render for ChartPanel {
         // detached-window header, rather than the global backend.price_scale.
         let mut settings_changed = self.chart.set_theme(theme)
             | self.chart.set_orders(orders_style)
+            | self.chart.set_vol_view(vol_view)
             | self.chart.set_scale(self.scale)
             | self.chart.set_orderbook_enabled(self.orderbook_enabled)
             | self
@@ -332,6 +335,10 @@ impl Render for ChartPanel {
         } else {
             Vec::new()
         };
+        // Arbitrage legend per pane: rows resolve from the store at render time (cheap map reads);
+        // exact market resolution for a click happens lazily in the handler. The block anchors at
+        // the plot's top-left below the pin row, or at the pane's right edge under the close
+        // button when the config asks for the right side.
         // Render Cancel Buy / Panic Sell as a GPUI overlay at the bottom of the graph body, ABOVE
         // the time-axis row. OverScene axis text renders above GPUI, so avoid its area. Each tab's
         // setting chooses Hide/Left/Center/Right. Keep buttons strictly inside the chart zone:

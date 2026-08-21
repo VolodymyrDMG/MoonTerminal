@@ -131,6 +131,7 @@ pub fn run(
     for w in 1..=windows {
         for m in 0..charts {
             dets.push(DetectRow {
+                open_chart: false,
                 seq,
                 market: markets[m % n].clone(),
                 time_ms: now_ms(),

@@ -26,11 +26,9 @@ fn presentation_scope_keeps_hidden_detection_cards_retained() {
         .collect();
     assert_eq!(selected, vec![22]);
     assert_eq!(retained, vec![11, 22, 11]);
-    assert!(
-        retained
-            .iter()
-            .all(|core| detection_core_visible(*core, &[11, 22]))
-    );
+    assert!(retained
+        .iter()
+        .all(|core| detection_core_visible(*core, &[11, 22])));
 
     let src = include_str!("mod.rs");
     let ingest = ingest_body();
@@ -234,4 +232,55 @@ fn name_budget_follows_the_space_a_card_actually_has() {
     assert_eq!(cards::side_name_w(100.0, true), 50.0);
     // Never below the floor, however narrow the card is configured.
     assert!(cards::side_name_w(1.0, true) >= 24.0);
+}
+
+/// The gear popup's tick window trims the frozen rows to a SUFFIX: an exact `-window` boundary
+/// stays in, older rows drop out, and the window delta and volume measure the trimmed slice — so
+/// 1/3/5 answer "what happened in the last N seconds", not "since the snapshot began".
+///
+/// Mutation: filter with `<=` (boundary trade dropped), measure the full rows (window ignored),
+/// count one-trade windows as a 0% move instead of "—", or read an empty window as $0 turnover
+/// instead of "no data".
+#[test]
+fn tick_window_trims_to_suffix_and_scopes_the_delta() {
+    use moon_core::market::DetectTick;
+
+    use super::cards::{window_delta, window_slice, window_volume};
+
+    let t = |t_rel_ms: f32, price: f32, quote: f32| DetectTick {
+        t_rel_ms,
+        price,
+        quote,
+        sell: false,
+    };
+    // 25 s of quiet decline, then a burst in the last 4 s: 100 → 90 overall, 96 → 90 in-window.
+    let ticks = [
+        t(-25_000.0, 100.0, 1_000.0),
+        t(-15_000.0, 96.0, 200.0), // exactly on the 15 s boundary — kept
+        t(-4_000.0, 93.0, 40.0),
+        t(-500.0, 90.0, 8.0),
+    ];
+
+    assert_eq!(window_slice(&ticks, 30_000.0).len(), 4);
+    assert_eq!(window_slice(&ticks, 15_000.0).len(), 3);
+    assert_eq!(window_slice(&ticks, 5_000.0).len(), 2);
+
+    let d30 = window_delta(&ticks, 30_000.0).expect("full window");
+    assert!((d30 - -10.0).abs() < 1e-4, "100→90 is -10%, got {d30}");
+    let d15 = window_delta(&ticks, 15_000.0).expect("15 s window");
+    assert!((d15 - -6.25).abs() < 1e-4, "96→90 is -6.25%, got {d15}");
+
+    // Volume follows the same suffix: distinct quotes make a wrong slice a wrong sum.
+    assert_eq!(window_volume(&ticks, 30_000.0), Some(1_248.0));
+    assert_eq!(window_volume(&ticks, 15_000.0), Some(248.0));
+    assert_eq!(window_volume(&ticks, 5_000.0), Some(48.0));
+    // One trade is still real turnover — only an EMPTY window reads as "no data".
+    assert_eq!(window_volume(&ticks[..1], 30_000.0), Some(1_000.0));
+    assert_eq!(window_volume(&ticks, 0.25), None);
+    assert_eq!(window_volume(&[], 30_000.0), None);
+
+    // A window holding one trade (or none) has no first-to-last change to print.
+    assert_eq!(window_delta(&ticks[..1], 30_000.0), None);
+    assert_eq!(window_delta(&ticks, 0.25), None);
+    assert_eq!(window_delta(&[], 30_000.0), None);
 }
