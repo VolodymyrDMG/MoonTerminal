@@ -21,3 +21,5 @@ general.log_to_file_hint: "App and core logs are written to logs/<date>_<source>
 general.log_retention: "Keep log"
 general.log_retention_hint: "Files older than this are deleted on startup and once a day. 0 — keep everything."
 general.days: "days"
+general.charts_auto_activate: "Switch to chart on detect"
+general.charts_auto_activate_hint: "As in Moonbot: strategy SilentNoCharts=NO — the detect's coin opens on Main (one per pass); AddToChart set — the panel switches itself to the Add tab that received the new coin. The application window is never raised. Off — detects leave the charts alone, as before."

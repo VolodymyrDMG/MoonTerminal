@@ -21,3 +21,5 @@ general.log_to_file_hint: "Log ứng dụng và core ghi vào logs/<ngày>_<ngu�
 general.log_retention: "Giữ log"
 general.log_retention_hint: "File cũ hơn mức này bị xóa lúc khởi động và mỗi ngày một lần. 0 — giữ tất cả."
 general.days: "ngày"
+general.charts_auto_activate: "Chuyển sang biểu đồ khi phát hiện"
+general.charts_auto_activate_hint: "Như trong Moonbot: chiến lược có SilentNoCharts=NO — coin được phát hiện mở trên Main (mỗi lượt một coin); có AddToChart — bảng tự chuyển sang tab Add vừa nhận coin mới. Cửa sổ ứng dụng không được đưa lên trước. Tắt — phát hiện không động vào biểu đồ, như trước."

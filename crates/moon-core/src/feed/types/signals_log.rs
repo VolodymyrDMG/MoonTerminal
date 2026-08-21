@@ -86,6 +86,11 @@ pub struct DetectRow {
     /// TTL either, so it never becomes a detect card, and the chart caption that reads every row
     /// prints nothing for both.
     pub strat_name: String,
+    /// FORK: whether the source strategy wants the coin's chart opened when the signal arrives:
+    /// Moonbot's `SilentNoCharts=NO` (the bot-side default). `false` when the strategy set
+    /// `SilentNoCharts=YES`, when there is no strategy snapshot, or when no schema default is
+    /// known — silence is the safe reading, matching "a detect must not pull the user unasked".
+    pub open_chart: bool,
 }
 
 impl DetectRow {

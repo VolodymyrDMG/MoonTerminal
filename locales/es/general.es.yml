@@ -21,3 +21,5 @@ general.log_to_file_hint: "Los registros de app y núcleos se escriben en logs/<
 general.log_retention: "Conservar registro"
 general.log_retention_hint: "Los archivos más antiguos se eliminan al iniciar y una vez al día. 0 — conservar todo."
 general.days: "días"
+general.charts_auto_activate: "Cambiar al gráfico al detectar"
+general.charts_auto_activate_hint: "Como en Moonbot: estrategia con SilentNoCharts=NO — la moneda detectada se abre en Main (una por pasada); con AddToChart — el panel cambia solo a la pestaña Add que recibió la moneda. La ventana de la aplicación no se trae al frente. Des — las detecciones no tocan los gráficos, como antes."
