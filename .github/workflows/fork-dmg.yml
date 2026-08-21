@@ -60,6 +60,8 @@ jobs:
           mv target/x86_64-apple-darwin/release/moonterminal stage/moonterminal-x86_64
           rm -rf target
       - name: Package .app + .dmg
+        # Calls the FORK COPY of make-dmg.sh: identical to upstream's except for an explicit
+        # hdiutil -size (runs #12/#13 died to its automatic scratch sizing with 39 GiB free).
         # v0.26's make-dmg.sh validates CFBundleVersion as strictly numeric X.Y[.Z] and takes it
         # positionally; the bare fork tag ("0.26-move.24") now fails that check — run #6 died
         # here with "refusing to bundle a non-numeric CFBundleVersion". Map vA.B[-.C]-move.N to
@@ -78,7 +80,7 @@ jobs:
           else
             ver="0.0.0"
           fi
-          bash .github/scripts/make-dmg.sh "$ver"
+          bash .github/scripts/fork-make-dmg.sh "$ver"
       - uses: actions/upload-artifact@v7
         with:
           name: MoonTerminal-${{ github.run_number }}
