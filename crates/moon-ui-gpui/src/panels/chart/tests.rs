@@ -92,3 +92,43 @@ fn chart_stacks_pass_their_workspace_group_into_every_panel() {
         "AddToChart panels must be constructed with their workspace group: {args:?}"
     );
 }
+
+/// The volume-measure gesture must occupy exactly its slot in the left-press priority chain:
+/// AFTER figure handling (drawing keeps its modifier gestures over the band) and BEFORE the
+/// trading gestures (inside the band a plain press measures — it must never place an order).
+/// The release half must distinguish a drag (keep the bracket) from a stationary click (clear).
+#[test]
+fn volume_measure_sits_between_figures_and_trading_in_the_press_chain() {
+    let source = include_str!("render_input.rs");
+    let down = source
+        .split("pub(super) fn mouse_down_left(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(super) fn mouse_down_right(").next())
+        .expect("left-press router must exist");
+    let probe = down
+        .find("vol_measure_probe")
+        .expect("band press probe must exist");
+    let fig = down
+        .find("try_fig_click")
+        .expect("figure branch must exist");
+    let trade = down
+        .find("try_place_order_click")
+        .expect("trading branch must exist");
+    assert!(fig < probe, "figure layer keeps priority over the band");
+    assert!(
+        probe < trade,
+        "a band press must never fall through to trading"
+    );
+
+    let up = source
+        .split("pub(super) fn mouse_up_left(")
+        .nth(1)
+        .and_then(|tail| tail.split("pub(super) fn mouse_down_right(").next())
+        .expect("left-release router must exist");
+    assert!(up.contains("this.vol_measure_drag.take()"));
+    assert!(
+        up.contains("set_vol_measure(pane, None)"),
+        "a stationary click must clear the bracket"
+    );
+}
+

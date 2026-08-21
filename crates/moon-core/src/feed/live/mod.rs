@@ -336,6 +336,7 @@ pub(super) fn run(
 
     let mut identity_sent = false;
     let mut last_orders = Instant::now();
+    // Arbitrage relay republish gate: an Arb event arms it, the send below fires at most ~1 Hz.
     let mut orders_table_pending = false;
     let mut last_strats = Instant::now();
     // Assets snapshot rate cap: minimum 1 s between publishes while the Assets view is active,
@@ -620,6 +621,8 @@ pub(super) fn run(
         events.clear();
         event_queue.drain_events_into(&mut events);
         let had_domain_event = !events.is_empty();
+        // The relay applies arb prices to retained market state before this loop sees the event,
+        // so the event itself is only an arming signal for the throttled republish below.
         // v4 delivers Stop/VStop changes as ordinary `OrderEvent::Updated` field
         // mutations rather than dedicated events, so `Updated` (already matched
         // below) covers them.
@@ -1176,6 +1179,7 @@ pub(super) fn run(
                             keep_alert_secs: params.keep_alert_secs,
                             add_to_chart: params.add_to_chart,
                             keep_in_chart_secs: params.keep_in_chart_secs,
+                            open_chart: params.open_chart,
                             sound_name: params.sound_name,
                             is_alert: d.is_alert_fire(),
                             // Kind of the strategy that produced the detect, used for its type badge.

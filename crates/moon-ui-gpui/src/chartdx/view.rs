@@ -91,6 +91,6 @@ pub fn view_gpu(
         // is why the field looked configurable for a long time without being so. They now carry
         // whatever arrives here.
         volume_alpha: style.volume_alpha.clamp(0.0, 1.0),
-        _pad2: 0.0,
+        volume_band_px: 0.0,
     }
 }

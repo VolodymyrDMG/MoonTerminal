@@ -151,6 +151,7 @@ impl ChartEngine {
             line_labels: true,
             cursor_labels: true,
             cursor_badge: None,
+            vol_view: moon_core::config::VolViewCfg::default(),
             pixel_scale: 1.0,
             #[cfg(windows)]
             scissor_rs: None,
@@ -437,6 +438,83 @@ impl ChartEngine {
             true
         } else {
             false
+        }
+    }
+
+    /// Apply volume-zone preferences; a change forces a column resample (band height, CVD, and
+    /// the enable switch all change what the next frame must hold) and a text re-prepare for the
+    /// scale labels.
+    pub fn set_vol_view(&mut self, vol_view: moon_core::config::VolViewCfg) -> bool {
+        let mut state = self.state.borrow_mut();
+        if state.vol_view != vol_view {
+            state.vol_view = vol_view;
+            state.needs_present = true;
+            for pr in &mut state.panes {
+                pr.volume_columns_key = None;
+                pr.gpu_prepare_dirty = true;
+            }
+            drop(state);
+            self.data.borrow_mut().mark_view_dirty();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Hit-test slot-local device coordinates against the volume band of an active pane.
+    ///
+    /// Returns the pane index and the pane-relative time in milliseconds under `x` when the
+    /// point lies inside the band (and the band is enabled) — the down-event probe for the
+    /// drag-measure tool.
+    pub fn vol_measure_probe(&self, x: f32, y: f32) -> Option<(usize, f32)> {
+        let state = self.state.borrow();
+        if !state.vol_view.enabled {
+            return None;
+        }
+        let frac = state.vol_view.band_fraction();
+        let cap = state.vol_view.band_max_px();
+        for (idx, pr) in state.panes.iter().enumerate() {
+            if !pr.active || pr.view.time_to_px <= 0.0 {
+                continue;
+            }
+            let b = pr.view.bounds;
+            let band = volume_graph::band_height_px(b[3], frac, cap);
+            let (left, right) = (b[0], b[0] + b[2]);
+            let (bottom, top) = (b[1] + b[3], b[1] + b[3] - band);
+            if x >= left && x <= right && y >= top && y <= bottom {
+                let t = pr.view.view_time0 + (x - left) / pr.view.time_to_px;
+                return Some((idx, t));
+            }
+        }
+        None
+    }
+
+    /// Pane-relative time under slot-local `x` for a known pane, without a band hit test — the
+    /// move/up half of the measure drag, which must keep tracking while the pointer wanders
+    /// vertically out of the band.
+    pub fn vol_measure_time_at(&self, idx: usize, x: f32) -> Option<f32> {
+        let state = self.state.borrow();
+        let pr = state.panes.get(idx)?;
+        if !pr.active || pr.view.time_to_px <= 0.0 {
+            return None;
+        }
+        let b = pr.view.bounds;
+        let x = x.clamp(b[0], b[0] + b[2]);
+        Some(pr.view.view_time0 + (x - b[0]) / pr.view.time_to_px)
+    }
+
+    /// Set or clear one pane's volume-measure range (pane-relative milliseconds). The overlay
+    /// rectangles rebuild on the frame path; labels need a text re-prepare, so the pane is
+    /// marked prepare-dirty too.
+    pub fn set_vol_measure(&mut self, idx: usize, range: Option<(f32, f32)>) {
+        let mut state = self.state.borrow_mut();
+        let Some(pr) = state.panes.get_mut(idx) else {
+            return;
+        };
+        if pr.vol_measure != range {
+            pr.vol_measure = range;
+            pr.gpu_prepare_dirty = true;
+            state.needs_present = true;
         }
     }
 

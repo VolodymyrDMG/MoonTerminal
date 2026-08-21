@@ -9,9 +9,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::applog::LogLine;
 use crate::feed::{
-    AssetsSnapshot, ChartAlertUpdate, ClientSettings, ConnStatus, DetectRow, EngineActionResult,
-    FeedMsg, LevManageState, LicenseState, NewsSnapshot, OrderRow, RuntimeState, StrategyRow,
-    StrategySchemaModel, TransferAssetsSnapshot,
+    AssetsSnapshot, ChartAlertUpdate, ClientSettings, ConnStatus, DetectRow,
+    EngineActionResult, FeedMsg, LevManageState, LicenseState, NewsSnapshot, OrderRow,
+    RuntimeState, StrategyRow, StrategySchemaModel, TransferAssetsSnapshot,
 };
 use crate::session::clock_skew::CoreClockSkew;
 use crate::session::order_lines::OrderLineStore;
@@ -190,6 +190,7 @@ pub struct CoreData {
     /// Local time of the latest `order_lines_rev` increment.
     pub order_lines_rev_ms: i64,
     pub detects_rev: u64,
+    /// Advances with each applied arbitrage batch; charts re-read their market's quotes on it.
     pub strategies_rev: u64,
     /// Advances on each core acknowledgement of a checkbox delta.
     ///

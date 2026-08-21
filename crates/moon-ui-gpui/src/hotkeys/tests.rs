@@ -118,3 +118,28 @@ fn typing_suppresses_a_modifier_binding_without_desynchronizing_it() {
         Some(HotkeyAction::PanicSell)
     );
 }
+
+/// The shift-hotkey pre-check must accept every phase the trader's press can legitimately move.
+///
+/// Named regression: shipping this guard as `status == "BuySet"` alone made the shift keys read
+/// as dead for the MOST common press — nudging a freshly placed limit buy, which the core still
+/// holds in `None` until its worker advances it (the terminal's own cancel-buys gate accepts the
+/// same `None | BuySet` pair). The sell side likewise must not drop a partially filled sell whose
+/// remainder is a live order.
+#[test]
+fn shift_phase_guard_accepts_fresh_buys_and_partial_sells() {
+    use super::shift_phase_matches;
+
+    // Buy side: fresh (None) and set entries move; a filled entry no longer has a buy to shift.
+    assert!(shift_phase_matches(false, "None"));
+    assert!(shift_phase_matches(false, "BuySet"));
+    assert!(!shift_phase_matches(false, "BuyDone"));
+    assert!(!shift_phase_matches(false, "SellSet"));
+
+    // Sell side: set and partially filled sells move; done and buy phases do not.
+    assert!(shift_phase_matches(true, "SellSet"));
+    assert!(shift_phase_matches(true, "SellAlmostDone"));
+    assert!(!shift_phase_matches(true, "SellDone"));
+    assert!(!shift_phase_matches(true, "BuySet"));
+    assert!(!shift_phase_matches(true, "None"));
+}

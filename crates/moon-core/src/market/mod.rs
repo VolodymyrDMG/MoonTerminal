@@ -26,7 +26,7 @@ pub use screener::ScreenerRow;
 pub use source::{
     pick_market_for_coin, pick_market_for_identity, ArbQuote, ArbVenue, CandleReadParams,
     ChartHistoryBuffers,
-    ChartHistoryCursor, ChartHistoryRead, CoinTag, DetectSnapshot, LatestPriceError,
+    ChartHistoryCursor, ChartHistoryRead, CoinTag, DetectSnapshot, DetectTick, LatestPriceError,
     MarketContextReadout, MarketDataSource, MarketFiguresReadout, MarketLabel, MarketLimits,
     MarketRevisions, MarketTickerReadout, MarketWindowsReadout, MaxOrder, MaxOrderSource,
     ReplayAddress, ReplayAddressError, VolumeSpan, VolumeSpanReadout, WindowFigures,
