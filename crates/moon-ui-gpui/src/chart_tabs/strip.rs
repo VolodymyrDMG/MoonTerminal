@@ -224,6 +224,24 @@ impl Render for ChartTabs {
             apply_all_label,
             cx,
         );
+        // The arbitrage overlay control: other-exchange prices from the bot's relay, global.
+        let arb_popup_open = self.arb_popup_open;
+        let arb_enabled = self.backend.read(cx).arb_view.view.enabled;
+        let arb_btn = super::arb_popup::arb_popup_host(
+            self,
+            MoonButton::new("chart-arb-settings")
+                .leading_icon(MoonButtonIconSlot::new("icons/globe.svg"))
+                .tooltip(t!("chart.arb.tip").to_string())
+                .size(MoonButtonSize::Micro)
+                .variant(if arb_popup_open || arb_enabled {
+                    MoonButtonVariant::Blue
+                } else {
+                    MoonButtonVariant::Ghost
+                })
+                .selected(arb_popup_open)
+                .render(),
+            cx,
+        );
         // The candle/trade display control beside layout edits the global setting set.
         let candle_popup_open = self.candle_popup_open;
         let candle_btn = candle_popup::candle_popup_host(
@@ -398,6 +416,7 @@ impl Render for ChartTabs {
                         design::chrome_section(cx)
                             .child(scale_dropdown)
                             .children(gather_btn)
+                            .child(arb_btn)
                             .child(candle_btn)
                             .child(graphics_btn)
                             .child(labels_btn)

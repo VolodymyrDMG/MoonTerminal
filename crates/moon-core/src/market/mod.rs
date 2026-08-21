@@ -23,6 +23,7 @@ use crate::session::CoreId;
 pub use candles::{CandleViewCfg, ChartCandle};
 pub use screener::ScreenerRow;
 pub use source::{
+    DetectTick,
     pick_market_for_coin, CandleReadParams, ChartHistoryBuffers, ChartHistoryCursor,
     ChartHistoryRead, DetectSnapshot, LatestPriceError, MarketDataSource, MarketLabel,
     MarketLimits, MarketRevisions, MarketTickerReadout, MaxOrder, MaxOrderSource,

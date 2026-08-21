@@ -1,5 +1,6 @@
 //! Custom chart tab strip ported from the egui chart tabs: Main plus AddToChart-N.
-//! It owns active-tab selection without automatically switching on a detect, chart double-click
+//! It owns active-tab selection without automatically switching on a detect (unless the
+//! `charts_auto_activate` setting opts in; see [`ingest`]), chart double-click
 //! routing to Main, and detaching tabs into OS windows when Classic owns the workspace. Auto keeps
 //! its chart tabs inside the group window. The center `DockArea` panel contains this strip and the
 //! active `ChartPanel`; detects, orders, and lower tabs are separate dock panels.
@@ -10,6 +11,7 @@
 mod add_stack;
 // `pub(crate)` because Backend queues a detached window's ⧉ press as `ApplyAllRequest`.
 pub(crate) mod apply_all;
+mod arb_popup;
 mod candle_popup;
 mod graphics_popup;
 // `pub(crate)` because the header price ticker reuses `search` and `render_popup`.
@@ -46,8 +48,8 @@ use moon_ui::{
 };
 use rust_i18n::t;
 
-use crate::Backend;
 use crate::persistence::chart_persist;
+use crate::Backend;
 use moon_core::config::{ChartBucket, ChartTheme, WorkspaceMode};
 use moon_core::market::MarketLabel;
 use moon_core::session::CoreId;
@@ -334,6 +336,8 @@ pub struct ChartTabs {
     /// Whether the chart-labels popup is open, and which row has its style panel expanded.
     labels_popup_open: bool,
     labels_style_open: Option<usize>,
+    /// Anchored global arbitrage-overlay settings popup.
+    arb_popup_open: bool,
     /// Fit-mode height field.
     layout_fit_input: Entity<MoonInputState>,
     /// Scroll-mode height field.
@@ -729,6 +733,7 @@ impl ChartTabs {
             graphics_popup_open: false,
             labels_popup_open: false,
             labels_style_open: None,
+            arb_popup_open: false,
             layout_fit_input,
             layout_scroll_input,
             custom_name_input,
@@ -919,8 +924,14 @@ impl ChartTabs {
         let req = self.backend.update(cx, |b, _| {
             b.take_open_compare_request_for_group(self.group.as_str())
         });
-        if let Some((core, market)) = req {
-            self.open_compare_tab(core, market, cx);
+        if let Some((core, market, single)) = req {
+            if single {
+                // The arbitrage legend's venue click: ONE chart of that exact market, like a
+                // one-coin "Open in new tab", never group-wide comparison seeding.
+                self.open_pairs_in_new_tab(vec![(core, market)], cx);
+            } else {
+                self.open_compare_tab(core, market, cx);
+            }
             self.last_sig = chart_tabs_sig(self.backend.read(cx), self.group.as_str());
         }
     }

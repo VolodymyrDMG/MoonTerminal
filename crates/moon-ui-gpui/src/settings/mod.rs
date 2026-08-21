@@ -429,6 +429,7 @@ fn settings_sig(b: &Backend) -> u64 {
     cfg.core_sort.hash(&mut h);
     cfg.report_valuation_mode.hash(&mut h);
     cfg.charts_split_by_core.hash(&mut h);
+    cfg.charts_auto_activate.hash(&mut h);
     cfg.charts_stack_scroll.hash(&mut h);
     cfg.charts_stack_compress.hash(&mut h);
     cfg.chart_stack_height.hash(&mut h);

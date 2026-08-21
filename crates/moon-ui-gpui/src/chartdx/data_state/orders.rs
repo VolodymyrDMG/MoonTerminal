@@ -153,6 +153,7 @@ impl ChartDataState {
                 let figures_sig = self.figures_sig();
                 if force
                     || pr.last_order_lines_rev != core_st.order_lines_rev
+                    || pr.last_arb_rev != core_st.arb_rev
                     || pr.last_order_highlight_uid != highlight_uid
                     || pr.last_order_drag_preview != drag_preview_sig
                     || pr.last_figures_sig != figures_sig
@@ -202,6 +203,16 @@ impl ChartDataState {
                             labels: &mut pr.figure_labels,
                         },
                     );
+                    // Arbitrage platform traces ride the seg layer after figures: the relay's
+                    // recent trail as a thin polyline plus a dotted level from the latest point
+                    // to the right edge, colored per platform from arb_view.
+                    append_arb_trails(
+                        &self.arb_view,
+                        core_st,
+                        &pane.market,
+                        pane.view.epoch_ms,
+                        &mut segs,
+                    );
                     // News marks, then trade history, then warning badges ride the same layer
                     // after the orders, so none of them is hidden under an order line's cross.
                     // The order among these three is their stacking order, last one on top.
@@ -246,6 +257,7 @@ impl ChartDataState {
                         self.view_dirty = true;
                     }
                     pr.last_order_lines_rev = core_st.order_lines_rev;
+                    pr.last_arb_rev = core_st.arb_rev;
                     pr.last_order_lines_sync_ms = now;
                     pr.pending_order_gpu_rev = Some(core_st.order_lines_rev);
                     pr.last_order_highlight_uid = highlight_uid;
@@ -487,7 +499,11 @@ fn rgb_u32(c: [u8; 3]) -> u32 {
 /// and loss red for either side: a short sell below entry is positive and a stop above it is negative.
 fn signed_pct(level: f32, entry: f32, short: bool) -> f32 {
     let raw = (level - entry) / entry * 100.0;
-    if short { -raw } else { raw }
+    if short {
+        -raw
+    } else {
+        raw
+    }
 }
 
 /// Selects the positive size-label color for longs and the negative color for shorts.
@@ -574,4 +590,83 @@ pub(super) fn refresh_orderbook_label_notionals(
 /// Formats a dollar amount with an SI suffix, for example 1234 as "$1.23K".
 fn fmt_usd(v: f64) -> String {
     format!("${}", fmt_size_2dp(v))
+}
+
+/// Push each enabled arbitrage platform's recent price TRACE for this pane's market.
+///
+/// The relay retains up to ten timestamped points per platform; they become a thin solid
+/// polyline (the bot draws the same short traces), and the newest point continues to the right
+/// edge as a dotted constant-price level — "where it is now" stays readable even when the trail
+/// is short or off-screen. Colors come from `arb_view` (explicit entry or the deterministic
+/// palette). Disabled master switch or `lines=false` contributes nothing — the legend can still
+/// show numbers.
+fn append_arb_trails(
+    arb_view: &moon_core::config::ArbViewCfg,
+    core_st: &moon_core::session::store::CoreData,
+    market: &str,
+    epoch_ms: f64,
+    segs: &mut Vec<moon_chart::layers::SegInstance>,
+) {
+    if !arb_view.enabled || !arb_view.lines {
+        return;
+    }
+    let Some(quotes) = core_st.arb.get(market) else {
+        return;
+    };
+    for q in quotes {
+        if !(q.price > 0.0) {
+            continue;
+        }
+        let pv = arb_view.platform(&q.platform_name);
+        if !pv.on {
+            continue;
+        }
+        let [r, g, b] = pv.color;
+        let color = [
+            f32::from(r) / 255.0,
+            f32::from(g) / 255.0,
+            f32::from(b) / 255.0,
+            0.9,
+        ];
+        let t_rel = |ms: i64| (ms as f64 - epoch_ms) as f32;
+        // Trail polyline: consecutive relay points with real times, ending at the newest price.
+        let mut pts: Vec<(i64, f32)> = q
+            .trail
+            .iter()
+            .filter(|(ms, price, _)| *ms > 0 && *price > 0.0)
+            .map(|(ms, price, _)| (*ms, *price))
+            .collect();
+        if q.time_ms > 0 && pts.last().is_none_or(|(ms, _)| *ms < q.time_ms) {
+            pts.push((q.time_ms, q.price));
+        }
+        for w in pts.windows(2) {
+            let ((t0, p0), (t1, p1)) = (w[0], w[1]);
+            segs.push(moon_chart::layers::SegInstance {
+                t0_rel: t_rel(t0),
+                p0,
+                t1_rel: t_rel(t1),
+                p1,
+                thickness: 1.0,
+                pattern: 0.0,
+                extend: moon_chart::layers::SEG_EXTEND_NONE,
+                clamp: moon_chart::layers::SEG_CLAMP_NONE,
+                color,
+            });
+        }
+        // Dotted level from the newest point to the right edge: EDGE extension keeps the price
+        // and moves only the far time, so the level stays horizontal at the current quote.
+        if let Some((tn, pn)) = pts.last().copied() {
+            segs.push(moon_chart::layers::SegInstance {
+                t0_rel: t_rel(tn),
+                p0: pn,
+                t1_rel: t_rel(tn),
+                p1: pn,
+                thickness: 1.0,
+                pattern: 2.0,
+                extend: moon_chart::layers::SEG_EXTEND_EDGE,
+                clamp: moon_chart::layers::SEG_CLAMP_NONE,
+                color,
+            });
+        }
+    }
 }

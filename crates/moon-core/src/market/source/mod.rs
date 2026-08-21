@@ -323,6 +323,21 @@ pub struct DetectSnapshot {
     /// The label distinguishes spot, futures, DEX, and combined connections. Empty when the type
     /// was not reported.
     pub exchange_kind: String,
+    /// Trades of the last 30 seconds before the snapshot, oldest to newest, for the ticks
+    /// mini-chart. Empty when the provider retains no trade ring for the market.
+    pub ticks: Vec<DetectTick>,
+}
+
+/// One frozen trade of a detection's last-30-seconds tick chart.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DetectTick {
+    /// Trade time relative to the snapshot moment in milliseconds, at or below zero.
+    pub t_rel_ms: f32,
+    pub price: f32,
+    /// Quote-currency volume of the trade (`qty * price`).
+    pub quote: f32,
+    /// True for a sell-side trade.
+    pub sell: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

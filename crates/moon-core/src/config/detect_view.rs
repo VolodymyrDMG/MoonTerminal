@@ -43,6 +43,9 @@ pub enum DetectChart {
     Candles,
     /// 24-hour price line.
     Line,
+    /// Frozen per-trade chart of the last 30 seconds before the detection: the price path with a
+    /// buy/sell quote-volume strip — the detect-time snapshot of the move's ignition.
+    Ticks,
 }
 
 /// Field assigned to a card slot.
@@ -64,6 +67,12 @@ pub enum DetectField {
     Delta24h,
     /// 1-hour delta, %.
     Delta1h,
+    /// Price change over the configured tick window ([`DetectViewCfg::ticks_window_secs`]),
+    /// computed from the frozen last-trades snapshot; "—" when the window holds under two trades.
+    DeltaWin,
+    /// Total quote turnover (buys + sells) over the configured tick window, from the same frozen
+    /// snapshot, in Moonbot short-amount form; "—" when the window holds no trades.
+    VolWin,
     /// Exchange name.
     Exchange,
     /// Exchange kind (spot/futures/…).
@@ -72,7 +81,7 @@ pub enum DetectField {
 
 impl DetectField {
     /// All assignable fields (slot-dropdown order; `None` = "—").
-    pub const ALL: [DetectField; 9] = [
+    pub const ALL: [DetectField; 11] = [
         DetectField::None,
         DetectField::Coin,
         DetectField::Time,
@@ -80,6 +89,8 @@ impl DetectField {
         DetectField::Core,
         DetectField::Delta24h,
         DetectField::Delta1h,
+        DetectField::DeltaWin,
+        DetectField::VolWin,
         DetectField::Exchange,
         DetectField::ExchangeKind,
     ];
@@ -234,8 +245,12 @@ fn default_large() -> DetectSizeCfg {
 pub struct DetectViewCfg {
     /// Active card size: 0=mini, 1=medium, 2=large.
     pub size: u8,
-    /// Decimal places for deltas (Δ24h/Δ1h), 0..=2 — ONE setting for all sizes.
+    /// Decimal places for deltas (Δ24h/Δ1h/Δ window), 0..=2 — ONE setting for all sizes.
     pub delta_decimals: u8,
+    /// Tick-chart window in seconds (1..=5 of the frozen 30-second trade snapshot) — ONE setting
+    /// for all sizes, shared by the card chart and the Δ-window/volume fields. The UI offers
+    /// 1/3/5; `0` ("unset" in old files) reads as 5.
+    pub ticks_window_secs: u8,
     pub mini: DetectSizeCfg,
     pub medium: DetectSizeCfg,
     pub large: DetectSizeCfg,
@@ -246,6 +261,7 @@ impl Default for DetectViewCfg {
         Self {
             size: DETECT_SIZE_MEDIUM,
             delta_decimals: 1,
+            ticks_window_secs: 5,
             mini: default_mini(),
             medium: default_medium(),
             large: default_large(),
@@ -262,6 +278,22 @@ impl DetectViewCfg {
     /// Number of delta decimal places, clamped to 0..=2.
     pub fn delta_decimals_clamped(&self) -> usize {
         self.delta_decimals.min(2) as usize
+    }
+
+    /// Tick-chart window in whole seconds, clamped to 1..=5.
+    ///
+    /// The legacy `0` ("unset") and any larger hand-edited value read as the maximum of 5, so
+    /// every stored file lands on an offered preset instead of an invisible selection.
+    pub fn ticks_window_secs_clamped(&self) -> u32 {
+        match self.ticks_window_secs {
+            0 => 5,
+            s => u32::from(s.min(5)),
+        }
+    }
+
+    /// Tick-chart window in milliseconds, for the chart canvases and window-delta math.
+    pub fn ticks_window_ms(&self) -> f32 {
+        self.ticks_window_secs_clamped() as f32 * 1000.0
     }
 
     /// Settings for a specific size.

@@ -263,6 +263,34 @@ pub struct OrderRow {
     pub sell_trace: Option<OrderTrace>,
 }
 
+/// One other-exchange price for a market from the core's arbitrage relay, decoupled from
+/// moonproto. The core relays only platforms enabled in the BOT's arbitrage panel; the terminal
+/// draws them and never invents its own.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArbQuote {
+    /// Protocol platform code byte; matches a connected core's venue `ExchangeId::code`, which is
+    /// how a legend row finds "my core on that exchange" for its open button.
+    pub platform: u8,
+    /// Bot-style display name ("BybitF", "GateS", "HL#1", …), also the arb-view config key.
+    pub platform_name: String,
+    /// Latest price on that platform.
+    pub price: f32,
+    /// Receipt time of that price in Unix milliseconds; 0 when the relay carried no usable time.
+    pub time_ms: i64,
+    /// Our market's price captured with the latest relay point — the spread base. 0 when absent.
+    pub my_price: f32,
+    /// Recent relay trail, oldest first: `(unix_ms, their_price, my_price)`; at most 10 points.
+    pub trail: Vec<(i64, f32, f32)>,
+}
+
+impl ArbQuote {
+    /// Spread of the platform price against ours in percent; `None` without a usable base.
+    pub fn spread_pct(&self) -> Option<f32> {
+        (self.my_price > 0.0 && self.price > 0.0)
+            .then(|| (self.price / self.my_price - 1.0) * 100.0)
+    }
+}
+
 /// One core detect for the toolbar and history, decoupled from moonproto.
 #[derive(Debug, Clone)]
 pub struct DetectRow {
@@ -285,6 +313,11 @@ pub struct DetectRow {
     /// Strategy `KeepInChart` duration in seconds before closing the automatically added coin
     /// chart while retaining the tab, defaulting to 60.
     pub keep_in_chart_secs: u32,
+    /// Whether the source strategy wants the coin's chart opened when the signal arrives:
+    /// Moonbot's `SilentNoCharts=NO` (the bot-side default). `false` when the strategy set
+    /// `SilentNoCharts=YES`, when there is no strategy snapshot, or when no schema default is
+    /// known — silence is the safe reading, matching "a detect must not pull the user unasked".
+    pub open_chart: bool,
     /// Strategy sound name as a WAV stem to play when the detect arrives; `None` is silent.
     pub sound_name: Option<String>,
     /// Whether this detect is a drawn-object alert trigger, `DETECT_KIND_ALERT`. These are shown and
@@ -944,6 +977,10 @@ pub enum FeedMsg {
     OrderLines(Vec<OrderRow>),
     /// Batch of new detects accumulated during one event-drain tick.
     Detects(Vec<DetectRow>),
+    /// Arbitrage relay snapshot: per market, the other-exchange quotes currently retained. Sent
+    /// throttled after Arb events; the store REPLACES its whole map with each batch, so a
+    /// platform the bot stopped relaying disappears instead of going stale.
+    ArbQuotes(Vec<(String, Vec<ArbQuote>)>),
     /// Batch of new core server-log lines accumulated during one event-drain tick.
     ServerLog(Vec<CoreLogLine>),
     /// Core strategy snapshot sent when its signature changes.

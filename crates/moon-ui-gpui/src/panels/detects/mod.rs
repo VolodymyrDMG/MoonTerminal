@@ -50,6 +50,9 @@ pub(crate) struct DetectItem {
     bars: Vec<(f32, f32, f32, f32)>,
     /// Close prices over the 24-hour snapshot window for line mode, oldest to newest.
     line: Vec<f32>,
+    /// Last-30-seconds trades frozen at detection time for the ticks mini-chart. Shared so
+    /// per-frame card rebuilds clone a pointer, not the rows.
+    ticks: std::sync::Arc<Vec<moon_core::market::DetectTick>>,
     /// 24-hour and one-hour percentage price changes at detection time.
     delta_24h: f32,
     delta_1h: f32,
@@ -275,6 +278,7 @@ impl DetectsPanel {
                     // Refresh the snapshot and TTL in place when the same core and market fire again.
                     it.bars = snap.bars;
                     it.line = snap.line;
+                    it.ticks = std::sync::Arc::new(snap.ticks);
                     it.delta_24h = snap.delta_24h;
                     it.delta_1h = snap.delta_1h;
                     it.venue = snap.venue;
@@ -301,6 +305,7 @@ impl DetectsPanel {
                         ttl_ms: ttl,
                         bars: snap.bars,
                         line: snap.line,
+                        ticks: std::sync::Arc::new(snap.ticks),
                         delta_24h: snap.delta_24h,
                         delta_1h: snap.delta_1h,
                         venue: snap.venue,

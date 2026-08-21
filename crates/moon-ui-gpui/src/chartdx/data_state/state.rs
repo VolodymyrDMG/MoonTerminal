@@ -27,6 +27,7 @@ impl ChartDataState {
             candle_view: moon_core::market::CandleViewCfg::default(),
             chart_graphics: moon_core::config::ChartGraphicsCfg::default(),
             chart_labels: moon_core::config::ChartLabelsCfg::default(),
+            arb_view: moon_core::config::ArbViewCfg::default(),
             default_x_ppm: None,
             prospective_usd: None,
             order_highlight: None,

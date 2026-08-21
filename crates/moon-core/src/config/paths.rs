@@ -435,6 +435,16 @@ pub fn tab_badges_path() -> PathBuf {
     cfg_dir().join("tab_badges.json")
 }
 
+/// Arbitrage overlay settings, portable like other view files.
+pub fn arb_view_path() -> PathBuf {
+    cfg_dir().join("arb_view.toml")
+}
+
+/// Chart volume-zone settings (half-second band switch + height), portable like other view files.
+pub fn vol_view_path() -> PathBuf {
+    cfg_dir().join("vol_view.toml")
+}
+
 /// Detect-tape presentation (dimensions/chart/rail/size slots, per group) in a separate
 /// portable file that can be shared through Copy/Paste in the ⚙ popup.
 pub fn detects_view_path() -> PathBuf {

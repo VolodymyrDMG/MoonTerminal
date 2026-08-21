@@ -82,6 +82,18 @@ detects.cfg.chart_line:
   ru: "Линия"
   en: "Line"
   es: "Línea"
+detects.cfg.chart_ticks:
+  ru: "Тики"
+  en: "Ticks"
+  es: "Ticks"
+detects.cfg.ticks_win:
+  ru: "Окно тиков, с"
+  en: "Tick window, s"
+  es: "Ventana de ticks, s"
+detects.cfg.hover_popup:
+  ru: "Попап при наведении на карточку"
+  en: "Hover popup on cards"
+  es: "Popup al pasar sobre la tarjeta"
 detects.cfg.rail_frame:
   ru: "Полоса сервера"
   en: "Server rail"
@@ -150,6 +162,14 @@ detects.field.d1:
   ru: "Δ 1ч"
   en: "Δ 1h"
   es: "Δ 1h"
+detects.field.dwin:
+  ru: "Δ тиков"
+  en: "Δ ticks"
+  es: "Δ ticks"
+detects.field.vwin:
+  ru: "Объём тиков"
+  en: "Tick volume"
+  es: "Volumen de ticks"
 detects.view.size_mini:
   ru: "Мини"
   en: "Mini"
@@ -198,6 +218,40 @@ detects.view.exchange_kind:
   ru: "Тип биржи"
   en: "Exchange type"
   es: "Tipo de exchange"
+# Hover popup on a feed card: detection parameters + enlarged tick chart over the configured
+# window (%{s} = window seconds from the gear popup).
+detects.hover.d30:
+  ru: "Δ %{s}с"
+  en: "Δ %{s}s"
+  es: "Δ %{s}s"
+detects.hover.price:
+  ru: "Цена"
+  en: "Price"
+  es: "Precio"
+detects.hover.buys:
+  ru: "Покупки %{s}с"
+  en: "Buys %{s}s"
+  es: "Compras %{s}s"
+detects.hover.sells:
+  ru: "Продажи %{s}с"
+  en: "Sells %{s}s"
+  es: "Ventas %{s}s"
+detects.hover.trades:
+  ru: "Сделок %{s}с"
+  en: "Trades %{s}s"
+  es: "Trades %{s}s"
+detects.hover.keep:
+  ru: "Держать"
+  en: "Keep"
+  es: "Mantener"
+detects.hover.no_ticks:
+  ru: "Нет сделок за %{s} с до детекта"
+  en: "No trades in the %{s} s before the detect"
+  es: "Sin operaciones en los %{s} s previos"
+detects.hover.hint:
+  ru: "ЛКМ — график · ПКМ — сравнение"
+  en: "LMB — chart · RMB — compare"
+  es: "LMB — gráfico · RMB — comparar"
 dock.todo.assets:
   ru: "Активы: канал балансов ядра пока не подключён"
   en: "Assets: core balance feed not wired yet"

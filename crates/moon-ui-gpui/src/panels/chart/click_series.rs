@@ -9,11 +9,14 @@
 //! `LeftDouble` places an order by default — which turns closing charts one after another on the
 //! same spot into an unrequested order on whatever slid under the cursor.
 //!
-//! This tracks the series one panel actually witnessed. A press extends the panel's own count only
-//! when it continues the press this panel saw last: same button, native count exactly one higher,
-//! and within the platform's own double-click time and distance. The last two are what make the
-//! previous observation identifiable as the pair's first press — a panel clicked once minutes ago
-//! also sits at native 1, and the native count alone would let a stranger's press chain onto it.
+//! This tracks the series one panel actually witnessed. A press extends the panel's own count
+//! when it continues the press this panel saw last: same button, within the platform's own
+//! double-click time, and no drag in between ([`ClickSeries::drag_beyond`]). FORK: deliberately
+//! NOT within the platform's double-click distance and NOT bound to the native count — the
+//! trader asked to open the pair with two clicks in DIFFERENT places, the order landing at the
+//! second click. Both presses still have to land on THIS panel inside one double-click interval,
+//! and a pan or line drag between them breaks the pair, so a stranger's press still cannot chain
+//! onto a stale first click.
 
 use gpui::MouseButton;
 
@@ -156,6 +159,22 @@ impl ClickSeries {
             .then_some(last.pos)
     }
 
+    /// Break the series when the pointer DRAGGED since its press: a pan or a line drag is not
+    /// the first half of a double click, and the press that ends such a gesture must not turn
+    /// the next quick click into a trade.
+    ///
+    /// Args:
+    ///     pos: Current pointer position in the same screen logical pixels presses use.
+    pub(super) fn drag_beyond(&mut self, pos: (f32, f32), threshold_px: f32) {
+        if let Some(last) = self.last {
+            if (pos.0 - last.pos.0).abs() > threshold_px
+                || (pos.1 - last.pos.1).abs() > threshold_px
+            {
+                self.last = None;
+            }
+        }
+    }
+
     /// Forget the current series because this panel no longer shows what was clicked.
     ///
     /// A vacated stack slot keeps its panel and takes the next coin, so without this the press that
@@ -174,12 +193,15 @@ impl Seen {
         at_ms: f64,
         pos: (f32, f32),
     ) -> bool {
+        // FORK: no `native == self.native + 1` and no `same_spot` — the platform resets its
+        // count the moment the second click lands a few pixels away, and this gesture exists
+        // exactly for clicks that land APART. `_native` and `_pos` stay in the signature so the
+        // close-residue mark keeps receiving real positions and a revert stays one hunk.
+        let _ = (native, pos);
         button == self.button
-            && native == self.native + 1
             // Range rather than `<=`, so a backwards clock step cannot make an ancient press look
             // like this one's immediate predecessor.
             && (0.0..=double_click_ms()).contains(&(at_ms - self.at_ms))
-            && same_spot(pos, self.pos)
     }
 }
 

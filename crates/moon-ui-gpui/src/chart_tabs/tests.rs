@@ -2,8 +2,8 @@
 
 // NOT `use super::*`: the parent imports `gpui::*`, whose `test` macro shadows `#[test]`.
 use super::{
-    AutoWorkspaceChartState, Tab, coin_search_bucket, preferred_auto_workspace_market,
-    prune_coin_selection_to_scope, windows::chart_detach_allowed,
+    coin_search_bucket, preferred_auto_workspace_market, prune_coin_selection_to_scope,
+    windows::chart_detach_allowed, AutoWorkspaceChartState, Tab,
 };
 use moon_core::config::{ChartBucket, WorkspaceMode};
 use moon_core::market::MarketLabel;
@@ -232,9 +232,35 @@ fn prune_coin_selection_drops_markets_outside_the_new_scope() {
 
     let pruned = prune_coin_selection_to_scope(&mut selected, Some(7));
 
-    assert!(pruned, "a selection spanning more than the new scope must report a change");
+    assert!(
+        pruned,
+        "a selection spanning more than the new scope must report a change"
+    );
     assert_eq!(
         selected,
         HashSet::from([(7, "BTCUSDT".to_string()), (7, "ETHUSDT".to_string())])
     );
+}
+
+/// The opt-in `charts_auto_activate` wiring in `chart_tabs/ingest.rs` must stay exactly opt-in:
+/// the switch reads the setting, only strip tabs qualify (a detached window is already on
+/// screen), and the OS window is never raised. The plausible regression is someone "simplifying"
+/// ingest by dropping the guard — restoring the pre-setting behavior where detects never switch —
+/// or inverting it into an unconditional switch that yanks the user mid-scan.
+#[test]
+fn detect_auto_activation_is_gated_on_the_setting_and_skips_detached_windows() {
+    let source = include_str!("ingest.rs");
+
+    assert!(source.contains("let auto_activate = b.config.charts_auto_activate;"));
+    assert!(source.contains("if auto_activate {"));
+    assert!(source.contains("let tab = Tab::Add(n, bucket);"));
+    // Only strip tabs are recorded as activation targets; the detached branch records nothing.
+    assert!(source.contains("last_strip_target = Some((n, bucket.clone()));"));
+    // Moonbot signal charts (SilentNoCharts=NO) stay behind the SAME opt-in: the collector is
+    // gated on the setting, and the coin lands on Main through panel reuse, not a new window.
+    assert!(source.contains("&& det.open_chart"));
+    assert!(source.contains("if auto_activate\n"));
+    assert!(source.contains("p.open_or_focus("));
+    // Activation must not raise the OS window: no activate_window call anywhere in ingest.
+    assert!(!source.contains("activate_window"));
 }

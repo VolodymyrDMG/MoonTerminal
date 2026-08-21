@@ -268,6 +268,19 @@ pub(super) fn mouse_down_left(
     if within && e.click_count <= 1 {
         this.fig_clear_selection_on_miss(pos, cx);
     }
+    // Volume-zone measure: a press inside the band starts a drag-measure (the bot's bracket
+    // gesture), so inside the band a left press is a measuring gesture, not a trade or a pan.
+    // A stationary click clears the previous bracket on release. Runs before the trading
+    // gestures for exactly that reason; orders and figures above still win where they overlap.
+    if within && e.click_count <= 1 {
+        if let Some((pane, t)) = this.chart.vol_measure_probe(pos.0, pos.1) {
+            this.vol_measure_drag = Some((pane, t, pos.0));
+            this.chart.set_vol_measure(pane, Some((t, t)));
+            cx.notify();
+            cx.stop_propagation();
+            return;
+        }
+    }
     // Second, the TRADING gestures are off while the Sells-to-zone mode is armed: the mode is a
     // drawing posture — the badge and the tool picker both say so — and a press meant for a band
     // must not place or cancel an order instead. That covers the order book too, whose click also
@@ -356,6 +369,12 @@ pub(super) fn mouse_down_left(
     }
 }
 
+/// Pane time under a window position for the measure release, `None` outside the chart slot.
+fn self_time_at(this: &ChartPanel, pane: usize, position: Point<Pixels>) -> Option<f32> {
+    let (pos, _) = this.chart_local(position)?;
+    this.chart.vol_measure_time_at(pane, pos.0)
+}
+
 /// Routes left-button up to finish a figure/order drag or chart navigation.
 pub(super) fn mouse_up_left(
     this: &mut ChartPanel,
@@ -365,6 +384,22 @@ pub(super) fn mouse_up_left(
 ) {
     // Before every early return below: the release ends the gesture whichever branch takes it.
     settle_paced_drag(this, cx);
+    // Volume-measure release: a real drag keeps its bracket on screen; a stationary click
+    // (release within a few pixels of the press) CLEARS the previous bracket instead — the
+    // band's click-to-dismiss.
+    if let Some((pane, t0, x0)) = this.vol_measure_drag.take() {
+        let sf = window.scale_factor();
+        let moved = this
+            .chart_local(e.position)
+            .map(|(pos, _)| (pos.0 - x0).abs() > 3.0 * sf);
+        match (moved, self_time_at(this, pane, e.position)) {
+            (Some(true), Some(t1)) => this.chart.set_vol_measure(pane, Some((t0, t1))),
+            _ => this.chart.set_vol_measure(pane, None),
+        }
+        cx.notify();
+        cx.stop_propagation();
+        return;
+    }
     // A draw-drag-release gesture (Command/Ctrl down, drag, release) completes a segment/channel
     // without a second click. A stationary click is not a drag gesture and waits for click two.
     if let Some((pos, _)) = this.chart_local(e.position) {
@@ -678,6 +713,28 @@ pub(super) fn mouse_move(
         e.pressed_button == Some(MouseButton::Left),
         e.pressed_button == Some(MouseButton::Right),
     );
+    // A held button that traveled is a DRAG, not the first half of a double click: break the
+    // panel's click series, or the release of a pan/line drag would pair with the next quick
+    // press and trade (the pair check no longer requires the same spot — see click_series.rs).
+    {
+        let origin = window.bounds().origin;
+        this.click_series.drag_beyond(
+            (
+                f32::from(origin.x + e.position.x),
+                f32::from(origin.y + e.position.y),
+            ),
+            6.0,
+        );
+    }
+    if let Some((pane, t0, _x0)) = this.vol_measure_drag {
+        if let Some(t1) = this.chart.vol_measure_time_at(pane, pos.0) {
+            // Engine-retained state on the present path: no GPUI notify needed, the canvas
+            // redraws the bracket and its labels on its own tick.
+            this.chart.set_vol_measure(pane, Some((t0, t1)));
+        }
+        cx.stop_propagation();
+        return;
+    }
     if this.fig_drag.is_some() {
         this.update_fig_pointer(pos, within, true, cx);
         cx.stop_propagation();

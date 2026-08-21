@@ -551,3 +551,5 @@ fn log_since_recovers_from_a_restarted_counter() {
 
     assert_eq!(lines.map(|l| l.msg.clone()).collect::<Vec<_>>(), ["fresh"]);
 }
+
+

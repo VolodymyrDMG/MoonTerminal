@@ -827,8 +827,12 @@ fn def_trade_volume_alpha() -> f32 {
 }
 
 /// Default bottom-volume display style.
+///
+/// FORK: off — this build draws its own half-second buy/sell volume band from the tick tape,
+/// and two stacked volume bands read as noise. The upstream per-candle band stays available
+/// through the same setting for anyone who wants both.
 fn def_candle_volume_style() -> u8 {
-    crate::market::candles::VOLUME_STYLE_HILLS
+    crate::market::candles::VOLUME_STYLE_OFF
 }
 
 /// Default bottom-volume band height, as a fraction of the plot height.

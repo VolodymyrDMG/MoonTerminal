@@ -192,6 +192,8 @@ pub(super) fn boot(cfg: AppConfig, input: BootInput, cx: &mut App) {
         coin_suggest: HashMap::new(),
         ui_session: UiSessionState::default(),
         detects_view: moon_core::config::DetectViewFile::load(),
+        arb_view: moon_core::config::ArbViewFile::load(),
+        vol_view: moon_core::config::VolViewFile::load(),
         news_tag_settings: moon_core::config::NewsTagSettings::load(),
         tab_badges: moon_core::config::TabBadgeSettings::load(),
         tab_badges_dirty: false,

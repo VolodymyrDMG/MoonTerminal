@@ -43,6 +43,7 @@ pub mod pane;
 #[cfg(windows)]
 pub mod readout;
 mod render_state;
+pub(crate) mod volume_graph;
 pub(crate) use render_state::arrival_flash_enabled;
 mod text;
 pub mod types;
@@ -329,6 +330,16 @@ struct PaneRender {
     cross_upload: Vec<ChartCross>,
     /// LIQUIDATION trade-cross upload buffer using `side=2` in the same combo ring.
     liq_upload: Vec<ChartCross>,
+    /// Retained per-tick tape feeding the Moonbot-style volume graph.
+    volume_tape: volume_graph::VolumeTape,
+    /// Coverage of the volume columns the backend currently holds; `None` forces a resample.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    volume_columns_key: Option<volume_graph::ColumnsKey>,
+    /// Per-side visible maxima of the delivered volume columns, for the graph's scale labels.
+    volume_scale: Option<(f32, f32)>,
+    /// Active volume-zone measure range in pane-relative milliseconds, set by dragging across
+    /// the band; drawn as a bracket by `sync_readout_params` and labeled by `text/prepare`.
+    vol_measure: Option<(f32, f32)>,
     last_line_upload: Vec<PriceLinePoint>,
     mark_line_upload: Vec<PriceLinePoint>,
     /// Reusable candle-layer upload buffer.
@@ -392,6 +403,8 @@ struct PaneRender {
     last_label_book_rev: u64,
     /// Last order revision uploaded into the userdata buffer.
     last_order_lines_rev: u64,
+    /// Last arbitrage-relay revision folded into the userdata hlines.
+    last_arb_rev: u64,
     /// Last order-zone signature. Zones live in the base cache, drawn over the grid and under the
     /// candles, while lines and traces render as an overlay. Zone changes must invalidate base;
     /// line hover and drag must not.
@@ -532,6 +545,10 @@ impl PaneRender {
             source_archive: u64::MAX,
             cross_upload: Vec::new(),
             liq_upload: Vec::new(),
+            volume_tape: volume_graph::VolumeTape::default(),
+            volume_columns_key: None,
+            volume_scale: None,
+            vol_measure: None,
             last_line_upload: Vec::new(),
             mark_line_upload: Vec::new(),
             candle_upload: Vec::new(),
@@ -557,6 +574,7 @@ impl PaneRender {
             last_book_lo: f32::NAN,
             last_book_hi: f32::NAN,
             last_order_lines_rev: u64::MAX,
+            last_arb_rev: u64::MAX,
             last_order_zone_sig: 0,
             last_order_lines_sync_ms: 0.0,
             pending_order_gpu_rev: None,
@@ -784,6 +802,9 @@ struct RenderState {
     /// A `&'static str` because a mode marker is a GLYPH, not a sentence: nothing to translate and
     /// nothing to allocate on the present path that redraws it.
     cursor_badge: Option<&'static str>,
+    /// Chart volume-zone preferences (band on/off + height, CVD, header window) from
+    /// vol_view.toml, applied by `ChartEngine::set_vol_view`.
+    vol_view: moon_core::config::VolViewCfg,
     pixel_scale: f32,
     /// Lazily created own-pass scissor rasterizer, recreated on device changes. It clips layers to
     /// the panel so price-positioned order books and orders cannot spill beyond the plot onto
@@ -960,6 +981,8 @@ struct ChartDataState {
     render: Rc<RefCell<RenderState>>,
     theme: ChartTheme,
     orders: OrdersStyle,
+    /// Arbitrage overlay preferences; lines join the userdata hline layer per pane.
+    arb_view: moon_core::config::ArbViewCfg,
     follow: bool,
     present_rate_hz: f32,
     w: u32,

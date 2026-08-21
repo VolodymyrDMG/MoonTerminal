@@ -9,9 +9,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::applog::LogLine;
 use crate::feed::{
-    AssetsSnapshot, ChartAlertUpdate, ClientSettings, ConnStatus, DetectRow, EngineActionResult,
-    FeedMsg, LevManageState, LicenseState, NewsSnapshot, OrderRow, RuntimeState, StrategyRow,
-    StrategySchemaModel, TransferAssetsSnapshot,
+    ArbQuote, AssetsSnapshot, ChartAlertUpdate, ClientSettings, ConnStatus, DetectRow,
+    EngineActionResult, FeedMsg, LevManageState, LicenseState, NewsSnapshot, OrderRow,
+    RuntimeState, StrategyRow, StrategySchemaModel, TransferAssetsSnapshot,
 };
 use crate::session::clock_skew::CoreClockSkew;
 use crate::session::order_lines::OrderLineStore;
@@ -96,6 +96,8 @@ pub struct CoreData {
     pub clock_skew: CoreClockSkew,
     /// Recent core detects, trimmed as a ring buffer to `MAX_DETECTS`.
     pub detects: VecDeque<DetectRow>,
+    /// Other-exchange quotes from the arbitrage relay, by market. Replaced wholesale per batch.
+    pub arb: HashMap<String, Vec<ArbQuote>>,
     /// Latest core strategy snapshot for the Strategies window.
     pub strategies: Vec<StrategyRow>,
     /// Core strategy schema with sections and per-kind fields, or `None` until it arrives.
@@ -171,6 +173,8 @@ pub struct CoreData {
     /// Local time of the latest `order_lines_rev` increment.
     pub order_lines_rev_ms: i64,
     pub detects_rev: u64,
+    /// Advances with each applied arbitrage batch; charts re-read their market's quotes on it.
+    pub arb_rev: u64,
     pub strategies_rev: u64,
     /// Advances on each core acknowledgement of a checkbox delta.
     ///
@@ -223,6 +227,7 @@ impl CoreData {
             order_lines: OrderLineStore::default(),
             clock_skew: CoreClockSkew::default(),
             detects: VecDeque::new(),
+            arb: HashMap::new(),
             strategies: Vec::new(),
             schema: None,
             assets: AssetsSnapshot::default(),
@@ -246,6 +251,7 @@ impl CoreData {
             order_lines_rev: 0,
             order_lines_rev_ms: 0,
             detects_rev: 0,
+            arb_rev: 0,
             strategies_rev: 0,
             strategies_ack_rev: 0,
             schema_rev: 0,
@@ -418,6 +424,12 @@ impl CoreData {
                     self.order_lines_rev = self.order_lines_rev.wrapping_add(1);
                     self.order_lines_rev_ms = now_unix_ms_i64();
                 }
+            }
+            FeedMsg::ArbQuotes(rows) => {
+                // Full replace: a batch is the complete current relay view, so platforms the bot
+                // stopped sending vanish here instead of surviving as stale legend rows.
+                self.arb = rows.into_iter().collect();
+                self.arb_rev = self.arb_rev.wrapping_add(1);
             }
             FeedMsg::Detects(detects) => {
                 if !detects.is_empty() {
