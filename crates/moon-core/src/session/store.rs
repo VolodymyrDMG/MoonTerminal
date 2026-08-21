@@ -276,6 +276,7 @@ pub struct CoreData {
     /// Local time of the latest `order_lines_rev` increment.
     pub order_lines_rev_ms: i64,
     pub detects_rev: u64,
+    /// Advances with each applied arbitrage batch; charts re-read their market's quotes on it.
     pub strategies_rev: u64,
     /// Advances on each core acknowledgement of a checkbox delta.
     ///

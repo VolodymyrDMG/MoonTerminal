@@ -339,6 +339,7 @@ fn a_clean_core_group_list_round_trips_through_merge_and_split() {
         merged.language,
         merged.market_mode,
         merged.charts_split_by_core,
+        merged.charts_auto_activate,
         merged.charts_stack_scroll,
         merged.charts_stack_compress,
         merged.chart_stack_height,
@@ -422,6 +423,8 @@ fn the_transport_survives_a_split() {
         Language::default(),
         MarketDataMode::default(),
         true,
+        // FORK: the detect auto-open opt-in sits between the split toggle and the stack pair.
+        false,
         false,
         false,
         360,
@@ -448,4 +451,22 @@ fn the_transport_survives_a_split() {
         text.contains("transport = \"v1\""),
         "the mode must persist as its MoonBot name, got: {text}"
     );
+}
+
+/// `charts_auto_activate` flows file → merge → runtime, and an old settings.toml without the
+/// field reads as OFF: silently upgrading everyone to tab-stealing charts would be hostile.
+#[test]
+fn charts_auto_activate_merges_and_defaults_off() {
+    let old: SettingsFile = toml::from_str("version = 1").expect("legacy settings parse");
+    assert!(
+        !old.charts_auto_activate,
+        "files from before the field must stay quiet"
+    );
+
+    let on = SettingsFile {
+        version: SCHEMA_VERSION,
+        charts_auto_activate: true,
+        ..Default::default()
+    };
+    assert!(merge(ServersFile::default(), on, None).charts_auto_activate);
 }

@@ -563,7 +563,11 @@ fn rgb_u32(c: [u8; 3]) -> u32 {
 /// and loss red for either side: a short sell below entry is positive and a stop above it is negative.
 fn signed_pct(level: f32, entry: f32, short: bool) -> f32 {
     let raw = (level - entry) / entry * 100.0;
-    if short { -raw } else { raw }
+    if short {
+        -raw
+    } else {
+        raw
+    }
 }
 
 /// Selects the positive size-label color for longs and the negative color for shorts.
@@ -651,3 +655,4 @@ pub(super) fn refresh_orderbook_label_notionals(
 fn fmt_usd(v: f64) -> String {
     format!("${}", fmt_size_2dp(v))
 }
+

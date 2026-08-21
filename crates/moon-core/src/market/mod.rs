@@ -25,7 +25,7 @@ pub use candles::{CandleViewCfg, ChartCandle};
 pub use screener::ScreenerRow;
 pub use source::{
     ArbQuote, ArbVenue, CandleReadParams, ChartHistoryBuffers, ChartHistoryCursor,
-    ChartHistoryRead, CoinTag, DetectSnapshot, LatestPriceError, LiqSpanReadout,
+    ChartHistoryRead, CoinTag, DetectSnapshot, DetectTick, LatestPriceError, LiqSpanReadout,
     MarketContextReadout, MarketDataSource, MarketFiguresReadout, MarketLabel, MarketLimits,
     MarketQuantityUnit, MarketRevisions, MarketTickerReadout, MarketWindowsReadout, MaxOrder,
     MaxOrderSource, OrderSizeRules, ReplayAddress, ReplayAddressError, VolumeAt, VolumeSpan,

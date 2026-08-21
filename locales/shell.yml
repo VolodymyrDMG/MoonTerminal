@@ -948,6 +948,22 @@ chart.defaults.apply_hint:
   ru: "Записать эти значения всем вкладкам выбранных видов. У этих настроек дефолта нет."
   en: "Write these values into every tab of the ticked kinds. These settings have no default."
   es: "Escribir estos valores en cada pestaña de los tipos marcados. Estos ajustes no tienen predeterminado."
+chart.vol.title:
+  ru: "Объёмы"
+  en: "Volumes"
+  es: "Volúmenes"
+chart.vol.enabled:
+  ru: "Зона объёмов внизу графика"
+  en: "Volume zone at the chart bottom"
+  es: "Zona de volumen abajo del gráfico"
+chart.vol.height:
+  ru: "Высота зоны"
+  en: "Zone height"
+  es: "Altura de la zona"
+chart.vol.hint:
+  ru: "Столбики — покупки и продажи за каждые полсекунды; протяжка по зоне измеряет диапазон, клик убирает измеритель"
+  en: "Bars are buys and sells per half second; drag across the zone to measure a range, click to dismiss"
+  es: "Las barras son compras y ventas por medio segundo; arrastra para medir, clic para quitar"
 chart.candles.title:
   ru: "Свечи и трейды"
   en: "Candles & trades"
@@ -956,6 +972,54 @@ chart.candles.tip:
   ru: "Настройки свечей и сделок"
   en: "Candles and trades settings"
   es: "Ajustes de velas y operaciones"
+chart.arb.tip:
+  ru: "Арбитраж: цены монеты на других биржах (общее для всех чартов)"
+  en: "Arbitrage: this coin's prices on other exchanges (global)"
+  es: "Arbitraje: precios de la moneda en otros exchanges (global)"
+chart.arb.title:
+  ru: "Арбитраж"
+  en: "Arbitrage"
+  es: "Arbitraje"
+chart.arb.enabled:
+  ru: "Показывать арбитраж на графиках"
+  en: "Show arbitrage on charts"
+  es: "Mostrar arbitraje en los gráficos"
+chart.arb.frame_view:
+  ru: "Отображение"
+  en: "Display"
+  es: "Visualización"
+chart.arb.lines:
+  ru: "Трасса цены на графике"
+  en: "Price trace on the chart"
+  es: "Traza de precio en el gráfico"
+chart.arb.numbers:
+  ru: "Легенда с цифрами"
+  en: "Legend with figures"
+  es: "Leyenda con cifras"
+chart.arb.percent:
+  ru: "Спред в процентах"
+  en: "Spread in percent"
+  es: "Spread en porcentaje"
+chart.arb.prices:
+  ru: "Абсолютные цены"
+  en: "Absolute prices"
+  es: "Precios absolutos"
+chart.arb.right:
+  ru: "Легенда справа"
+  en: "Legend on the right"
+  es: "Leyenda a la derecha"
+chart.arb.frame_platforms:
+  ru: "Биржи"
+  en: "Exchanges"
+  es: "Exchanges"
+chart.arb.color_tip:
+  ru: "Клик — следующий цвет"
+  en: "Click — next color"
+  es: "Clic — siguiente color"
+chart.arb.empty_hint:
+  ru: "Пока пусто: ядро ещё не прислало арбитражные цены. Проверь, что в мунботе включён арбитраж и отмечены площадки."
+  en: "Empty so far: the core has not relayed arbitrage prices yet. Check that arbitrage is enabled in Moonbot with platforms ticked."
+  es: "Vacío por ahora: el núcleo aún no ha enviado precios de arbitraje. Comprueba que el arbitraje esté activado en Moonbot con plataformas marcadas."
 chart.candles.frame_candles:
   ru: "Свечи"
   en: "Candles"

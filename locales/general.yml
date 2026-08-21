@@ -34,6 +34,14 @@ general.charts_split_by_core_hint:
   ru: "AddToChart по умолчанию: вкл — своя вкладка на ядро, выкл — все ядра группы в одной. Колонка «Связка» у ядра (Подключения) переопределяет это: ядра с одинаковым именем связки сводятся в одну вкладку."
   en: "AddToChart default: on — a tab per core, off — all cores of a group in one. The core's “Bundle” column (Connections) overrides this: cores sharing a bundle name merge into one tab."
   es: "AddToChart por defecto: act — una pestaña por núcleo, des — todos los núcleos del grupo en una. La columna «Conjunto» del núcleo (Conexiones) lo anula: los núcleos con el mismo nombre de conjunto se unen en una pestaña."
+general.charts_auto_activate:
+  ru: "Переключаться на график при детекте"
+  en: "Switch to chart on detect"
+  es: "Cambiar al gráfico al detectar"
+general.charts_auto_activate_hint:
+  ru: "Как в мунботе: у стратегии SilentNoCharts=NO — монета детекта открывается на Main (по одной за проход); задан AddToChart — панель сама переключается на вкладку Add с новой монетой. Окно приложения на передний план не выдёргивается. Выкл — детекты не трогают графики, как раньше."
+  en: "As in Moonbot: strategy SilentNoCharts=NO — the detect's coin opens on Main (one per pass); AddToChart set — the panel switches itself to the Add tab that received the new coin. The application window is never raised. Off — detects leave the charts alone, as before."
+  es: "Como en Moonbot: estrategia con SilentNoCharts=NO — la moneda detectada se abre en Main (una por pasada); con AddToChart — el panel cambia solo a la pestaña Add que recibió la moneda. La ventana de la aplicación no se trae al frente. Des — las detecciones no tocan los gráficos, como antes."
 general.separate_control_zones:
   ru: "Раздельные зоны управления"
   en: "Separate control zones"

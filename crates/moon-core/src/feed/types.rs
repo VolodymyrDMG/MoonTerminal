@@ -304,6 +304,11 @@ pub struct DetectRow {
     /// the strategy nor its schema says anything. Read the value through
     /// [`DetectRow::keep_in_chart_ttl_ms`] rather than multiplying this field by 1000.
     pub keep_in_chart_secs: u32,
+    /// Whether the source strategy wants the coin's chart opened when the signal arrives:
+    /// Moonbot's `SilentNoCharts=NO` (the bot-side default). `false` when the strategy set
+    /// `SilentNoCharts=YES`, when there is no strategy snapshot, or when no schema default is
+    /// known — silence is the safe reading, matching "a detect must not pull the user unasked".
+    pub open_chart: bool,
     /// Strategy sound name as a WAV stem to play when the detect arrives; `None` is silent.
     pub sound_name: Option<String>,
     /// Whether this detect is a drawn-object alert trigger, `DETECT_KIND_ALERT`. These are shown and
@@ -1118,6 +1123,9 @@ pub enum FeedMsg {
     OrderLines(Vec<OrderRow>),
     /// Batch of new detects accumulated during one event-drain tick.
     Detects(Vec<DetectRow>),
+    /// Arbitrage relay snapshot: per market, the other-exchange quotes currently retained. Sent
+    /// throttled after Arb events; the store REPLACES its whole map with each batch, so a
+    /// platform the bot stopped relaying disappears instead of going stale.
     /// Batch of new core server-log lines accumulated during one event-drain tick.
     ServerLog(Vec<CoreLogLine>),
     /// Core strategy snapshot sent when its signature changes.

@@ -197,6 +197,9 @@ struct Backend {
     /// Per-group detect-strip presentation: dimensions, chart, rail, and size slots.
     /// Stored in the portable `detects_view.toml` and saved immediately because the file is small.
     detects_view: moon_core::config::DetectViewFile,
+    /// Chart volume-zone preferences (half-second band on/off + height).
+    /// Stored in the portable `vol_view.toml` and saved immediately on change.
+    vol_view: moon_core::config::VolViewFile,
     /// Global News-panel tag settings: per-tag colours + the tag-visibility filter. Stored in the
     /// small portable `news_tags.json` and saved immediately on change.
     news_tag_settings: moon_core::config::NewsTagSettings,

@@ -6,9 +6,9 @@ use crate::market::source::{MarketLabel, MarketLimits, max_order_notional};
 use crate::session::CoreId;
 
 use super::{
-    ArbQuote, ArbVenue, CoinTag, DetectSnapshot, LatestPriceError, MarketContextReadout,
-    MarketDataSource, MarketFiguresReadout, MarketRevisions, MarketTickerReadout,
-    MarketWindowsReadout, OrderSizeRules, rows_to_ticks,
+    ArbQuote, ArbVenue, CoinTag, DetectSnapshot, DetectTick, LatestPriceError,
+    MarketContextReadout, MarketDataSource, MarketFiguresReadout, MarketRevisions,
+    MarketTickerReadout, MarketWindowsReadout, OrderSizeRules, rows_to_ticks,
 };
 use crate::market::candles::ChartCandle;
 
@@ -1056,6 +1056,33 @@ impl MarketDataSource {
                             (c.open, c.high, c.low, c.close),
                         );
                     }
+                }
+                // Freeze the last 30 seconds of the same trade rows for the ticks mini-chart —
+                // the detect-time snapshot of the move's ignition. Capped so one frantic market
+                // cannot bloat a card; the newest trades win.
+                const TICKS_WINDOW_MS: f64 = 30_000.0;
+                const TICKS_CAP: usize = 1_500;
+                let from_ms = now_ms as f64 - TICKS_WINDOW_MS;
+                out.ticks = ticks
+                    .iter()
+                    .filter(|t| {
+                        t.time_ms >= from_ms
+                            && t.time_ms.is_finite()
+                            && t.price.is_finite()
+                            && t.price > 0.0
+                            && t.qty.is_finite()
+                            && t.qty > 0.0
+                    })
+                    .map(|t| DetectTick {
+                        t_rel_ms: (t.time_ms - now_ms as f64) as f32,
+                        price: t.price,
+                        quote: t.qty * t.price,
+                        sell: t.side == crate::feed::Side::Sell,
+                    })
+                    .collect();
+                if out.ticks.len() > TICKS_CAP {
+                    let drop = out.ticks.len() - TICKS_CAP;
+                    out.ticks.drain(..drop);
                 }
             }
         }

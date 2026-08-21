@@ -24,6 +24,7 @@ pub mod core_groups;
 pub mod core_updates;
 pub mod crypto;
 pub mod detect_view;
+pub mod vol_view;
 pub mod groups;
 pub mod hotkeys;
 pub mod lang;
@@ -68,6 +69,7 @@ pub use core_groups::{
     sanitize_core_groups, unique_group_name,
 };
 pub use core_updates::CoreUpdateHistory;
+pub use vol_view::{VOL_HEIGHT_L, VOL_HEIGHT_M, VOL_HEIGHT_S, VolViewCfg, VolViewFile};
 pub use detect_view::{
     DETECT_RAIL_MAX, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart,
     DetectField, DetectSizeCfg, DetectSlot, DetectViewCfg, DetectViewFile, detect_slot_count,
@@ -267,6 +269,9 @@ pub struct AppConfig {
     pub market_mode: MarketDataMode,
     /// Separate AddToChart tab per core (settings.toml).
     pub charts_split_by_core: bool,
+    /// Switch the chart panel to the AddToChart tab when a detect with `AddToChart > 0` arrives
+    /// (settings.toml). Defaults to off: a detect must not pull the user to a chart unasked.
+    pub charts_auto_activate: bool,
     /// AddToChart stack: vertical scrolling (true) or divided window height (false, as before).
     pub charts_stack_scroll: bool,
     /// Compress the scroll stack as it fills so no scrollbar appears. Defaults to false.
@@ -345,6 +350,7 @@ impl AppConfig {
             language: Default::default(),
             market_mode: Default::default(),
             charts_split_by_core: Default::default(),
+            charts_auto_activate: Default::default(),
             charts_stack_scroll: Default::default(),
             charts_stack_compress: Default::default(),
             chart_stack_height: Default::default(),
@@ -444,6 +450,7 @@ impl AppConfig {
                 language: merged.language,
                 market_mode: merged.market_mode,
                 charts_split_by_core: merged.charts_split_by_core,
+                charts_auto_activate: merged.charts_auto_activate,
                 charts_stack_scroll: merged.charts_stack_scroll,
                 charts_stack_compress: merged.charts_stack_compress,
                 chart_stack_height: merged.chart_stack_height,
@@ -761,6 +768,8 @@ impl AppConfig {
             language: settings.language,
             market_mode: settings.market_mode,
             charts_split_by_core: settings.charts_split_by_core,
+            // FORK: the detect auto-open opt-in rides the settings file like its neighbours.
+            charts_auto_activate: settings.charts_auto_activate,
             charts_stack_scroll: settings.charts_stack_scroll,
             charts_stack_compress: settings.charts_stack_compress,
             chart_stack_height: settings.chart_stack_height,
@@ -829,6 +838,7 @@ impl AppConfig {
             self.language,
             self.market_mode,
             self.charts_split_by_core,
+            self.charts_auto_activate,
             self.charts_stack_scroll,
             self.charts_stack_compress,
             self.chart_stack_height,
@@ -961,6 +971,7 @@ impl AppConfig {
             Language::default(),
             MarketDataMode::default(),
             true,  // The chart toggle is non-structural; no rebuild.
+            false, // charts_auto_activate is behavioral, not structural.
             false, // charts_stack_scroll is purely visual, not structural.
             false, // charts_stack_compress is purely visual.
             schema::default_chart_stack_height(), // Stack height is not structural.
