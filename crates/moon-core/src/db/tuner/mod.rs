@@ -25,7 +25,7 @@ mod strategy_read;
 pub mod threshold_search;
 mod time;
 
-pub use fields::{FIELDS, FieldClass, FieldSpec, slot_type_for};
+pub use fields::{CEMA_FIELDS, FIELDS, FieldClass, FieldSpec, slot_type_for};
 pub use strategy_read::{
     StratFilters, strategy_cores, strategy_current_values, strategy_current_values_opt,
     strategy_filters,
@@ -93,14 +93,24 @@ impl Variant {
     fn where_sql(&self) -> String {
         let mut w = String::new();
         for b in &self.bounds {
-            if !FIELDS.iter().any(|s| s.col == b.field) {
+            let Some(spec) = FIELDS.iter().find(|s| s.col == b.field) else {
                 continue;
-            }
+            };
+            // FORK: a CustomEMA value is a harvested measurement, present only for deals whose
+            // strategy logged it. NULL here means "not measured", and coalescing it to zero would
+            // let such deals pass any range spanning zero — 0.00% is a common REAL value of these
+            // expressions. A missing measurement fails the filter instead, like the bot itself,
+            // which cannot apply a condition it never computed.
+            let cell = if spec.class == FieldClass::CustomEma {
+                format!("o.\"{}\"", b.field)
+            } else {
+                format!("COALESCE(o.\"{}\",0)", b.field)
+            };
             if let Some(v) = b.from.filter(|v| v.is_finite()) {
-                w.push_str(&format!(" AND COALESCE(o.\"{}\",0) >= {v}", b.field));
+                w.push_str(&format!(" AND {cell} >= {v}"));
             }
             if let Some(v) = b.to.filter(|v| v.is_finite()) {
-                w.push_str(&format!(" AND COALESCE(o.\"{}\",0) <= {v}", b.field));
+                w.push_str(&format!(" AND {cell} <= {v}"));
             }
         }
         if let Some((f, t)) = self.week_span {
@@ -377,7 +387,39 @@ fn tuner_source_on(conn: &Connection, q: &Query) -> ReadResult<(Query, String)> 
     let Some(src) = crate::db::analytics::unified_from_mode(conn, &q, projection)? else {
         return Err(ReadFail::NotReady);
     };
-    Ok((q, src))
+    Ok((q, cema_wrapped(conn, &src)))
+}
+
+/// FORK: wrap the unified source so every tuner read also sees the harvested CustomEMA columns.
+///
+/// The wrap ALWAYS emits the columns — the threshold-search scan selects every `FIELDS` entry
+/// unconditionally, so a source without them would break each read — but joins `cema_vals` only
+/// when the table exists on this connection: a replica written before this feature (or a test
+/// fixture) then serves plain NULLs instead of failing every tuner surface on a missing table.
+/// Joined by `(core_uid, taskid)`; the legacy branch projects `NULL AS taskid` and so carries no
+/// values, exactly right for rows whose logs are long gone.
+fn cema_wrapped(conn: &Connection, src: &str) -> String {
+    let has_table = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_schema WHERE type='table' AND name='cema_vals'",
+            [],
+            |_| Ok(()),
+        )
+        .is_ok();
+    let mut cols = String::new();
+    let mut joins = String::new();
+    for (i, (col, key)) in fields::CEMA_FIELDS.iter().enumerate() {
+        if has_table {
+            cols.push_str(&format!(", cv{i}.v AS \"{col}\""));
+            joins.push_str(&format!(
+                " LEFT JOIN cema_vals cv{i} ON cv{i}.core_uid = o.core_uid \
+                 AND cv{i}.taskid = o.taskid AND cv{i}.k = '{key}'"
+            ));
+        } else {
+            cols.push_str(&format!(", NULL AS \"{col}\""));
+        }
+    }
+    format!("(SELECT o.*{cols} FROM {src}{joins}) o")
 }
 
 /// Run quote preflight and row materialization inside one pinned tuner snapshot.

@@ -692,7 +692,8 @@ fn rep_indexes_created_for_preexisting_columns() {
             PRIMARY KEY (core_uid, newrecid));
          ALTER TABLE orders_rep ADD COLUMN closedate INTEGER;
          ALTER TABLE orders_rep ADD COLUMN strategyid INTEGER;
-         ALTER TABLE orders_rep ADD COLUMN buydate INTEGER;",
+         ALTER TABLE orders_rep ADD COLUMN buydate INTEGER;
+         ALTER TABLE orders_rep ADD COLUMN taskid INTEGER;",
     )
     .unwrap();
     test_support::rep_init(&conn);

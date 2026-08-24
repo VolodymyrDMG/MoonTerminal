@@ -102,6 +102,10 @@ impl StratFilters {
                 FieldClass::Base => self.ignore_base,
                 FieldClass::Delta | FieldClass::DeltaSlot => self.ignore_delta,
                 FieldClass::Volume => self.ignore_volume,
+                // FORK: a CustomEMA expression has no Ignore flag of its own — it filters iff it
+                // is written in the strategy's CustomEMA string, which only the global
+                // IgnoreFilters above can silence.
+                FieldClass::CustomEma => false,
             }
     }
 

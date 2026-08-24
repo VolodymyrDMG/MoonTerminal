@@ -17,6 +17,8 @@
 //! connection (WAL).
 
 pub mod analytics;
+/// FORK: CustomEMA values harvested from the terminal's core-log files for the tuner.
+pub mod cema;
 pub mod coin_lists;
 mod dates;
 pub mod integrity;
@@ -393,6 +395,11 @@ pub fn spawn_writer(_permit: report_recovery::ReportWritePermit) -> Option<Repor
     };
     if let Err(e) = init_db(&conn) {
         log::error!("отчёты: init схемы не удался: {e}");
+        return None;
+    }
+    // FORK: the CustomEMA harvest tables live beside the replica they answer for.
+    if let Err(e) = cema::init(&conn) {
+        log::error!("отчёты: init cema-таблиц не удался: {e}");
         return None;
     }
     let starts = Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
@@ -906,6 +913,16 @@ fn apply_msg(
         DbMsg::ValuationAck { through_seq } => {
             valuation::ack_outbox(conn, *through_seq)?;
             Ok(ApplyEffect::maintenance())
+        }
+        // FORK: a CustomEMA sweep batch. Value rows change what the tuner reads, so they publish
+        // like background catch-up; an offsets-only batch is bookkeeping and publishes nothing.
+        DbMsg::Cema { rows, offsets } => {
+            let wrote_values = cema::apply(conn, rows, offsets)?;
+            Ok(if wrote_values {
+                ApplyEffect::background(false)
+            } else {
+                ApplyEffect::maintenance()
+            })
         }
     }
 }

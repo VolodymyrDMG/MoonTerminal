@@ -16,6 +16,18 @@ pub enum FieldClass {
     Delta,
     DeltaSlot,
     Volume,
+    /// FORK: values of the strategy's CustomEMA expressions — `Min(12hours,1sec)`,
+    /// `Min(5hours,1sec)`, `Min(45min,1sec)`, `BTC(30sec,1sec)`.
+    ///
+    /// The core does not put these in the report row; the bot PRINTS them into its server log on
+    /// every task of a strategy whose CustomEMA field names them, marked with the task id. The
+    /// terminal harvests those lines from its own per-core log files into `cema_vals` (see
+    /// `db::cema`), and the tuner source LEFT-JOINs them in by `(core_uid, taskid)`. So these
+    /// columns are NULL for every deal whose strategy does not carry the expression (and for
+    /// anything older than the log retention) — which is why their variant SQL requires
+    /// `IS NOT NULL` instead of coalescing to zero: a missing measurement must fail the filter,
+    /// not impersonate "0.00%", a perfectly common real value.
+    CustomEma,
 }
 
 /// Description of one tuner field. This is the ONLY place to edit for a new report column or
@@ -249,6 +261,52 @@ pub const FIELDS: &[FieldSpec] = &[
         None,
         Some("Dump1h"),
     ),
+    // FORK: CustomEMA expression values harvested from core logs (see `db::cema`). These are not
+    // replica columns — `unified_from_mode` skips this class and `tuner_source_on` joins the
+    // values in — and no strategy parameter stores their threshold (the CustomEMA STRING does),
+    // so they stay unmapped: histogram, what-if bounds and per-field suggestion work, automatic
+    // search and one-click save do not.
+    field(
+        "cema_min12h",
+        "Min12h",
+        FieldClass::CustomEma,
+        None,
+        None,
+        None,
+    ),
+    field(
+        "cema_min5h",
+        "Min5h",
+        FieldClass::CustomEma,
+        None,
+        None,
+        None,
+    ),
+    field(
+        "cema_min45m",
+        "Min45m",
+        FieldClass::CustomEma,
+        None,
+        None,
+        None,
+    ),
+    field(
+        "cema_btc30s",
+        "BTC30s",
+        FieldClass::CustomEma,
+        None,
+        None,
+        None,
+    ),
+];
+
+/// FORK: CustomEMA fields as `(report column, cema_vals key)` — the single mapping the join in
+/// `tuner_source_on` and the log parser in `db::cema` both derive from.
+pub const CEMA_FIELDS: &[(&str, &str)] = &[
+    ("cema_min12h", "min12h"),
+    ("cema_min5h", "min5h"),
+    ("cema_min45m", "min45m"),
+    ("cema_btc30s", "btc30s"),
 ];
 
 /// `DeltaN_Type` value for a slot field (`None` means the field is not a slot).
