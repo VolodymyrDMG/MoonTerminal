@@ -109,6 +109,21 @@ pub(super) fn boot(cfg: AppConfig, input: BootInput, cx: &mut App) {
     let valuation = reports
         .as_ref()
         .and_then(|reports| moon_core::db::valuation::spawn_worker(reports.tx.clone()));
+    // FORK: harvest CustomEMA expression values from the per-core log files into the tuner's
+    // `cema_vals` (see `moon_core::db::cema`). A server list snapshot is enough: a server added
+    // mid-session starts contributing after the next launch, and its log file waits on disk.
+    if let Some(reports) = &reports {
+        moon_core::db::cema::spawn_sweeper(
+            cfg.servers
+                .iter()
+                .map(|s| moon_core::db::cema::SweepServer {
+                    uid: s.uid,
+                    name: s.name.clone(),
+                })
+                .collect(),
+            reports.tx.clone(),
+        );
+    }
     let valuation_dirty = valuation
         .as_ref()
         .map(|valuation| valuation.commit_dirty.clone());

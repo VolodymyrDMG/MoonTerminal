@@ -741,6 +741,10 @@ pub(in crate::analytics::tuner) fn flag_of(
         FieldClass::BvSv => ("UseBV_SV_Filter", !f.use_bvsv),
         FieldClass::Delta | FieldClass::DeltaSlot => ("IgnoreDelta", f.ignore_delta),
         FieldClass::Volume => ("IgnoreVolume", f.ignore_volume),
+        // FORK: CustomEMA has no Ignore flag of its own — the expression string IS the switch.
+        // The header never renders a toggle for this class, so the flag is only a placeholder
+        // that keeps this match total.
+        FieldClass::CustomEma => ("IgnoreFilters", f.ignore_filters),
     }
 }
 

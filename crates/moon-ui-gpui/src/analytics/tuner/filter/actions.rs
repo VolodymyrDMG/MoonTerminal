@@ -602,7 +602,9 @@ impl AnalyticsView {
                     FieldClass::BvSv => bvsv_touched = true,
                     FieldClass::Ping => ping_touched = true,
                     FieldClass::Base => base_touched = true,
-                    FieldClass::Filter | FieldClass::DeltaSlot => {}
+                    // FORK: CustomEMA fields are unmapped (no p_min/p_max), so this loop never
+                    // reaches them; the arm only keeps the match total.
+                    FieldClass::Filter | FieldClass::DeltaSlot | FieldClass::CustomEma => {}
                 }
             }
         }
