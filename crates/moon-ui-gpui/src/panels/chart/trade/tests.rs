@@ -78,8 +78,10 @@ fn move_gestures_split_entry_exit_and_direction() {
 /// this matcher.
 #[test]
 fn gesture_matching_reads_button_modifiers_and_click_count() {
+    // `pair_in_book: true` throughout: this test pins button/modifier/count reading; the book
+    // gate has its own test below.
     let m = |binding, button, modifiers, clicks| {
-        ChartPanel::gesture_matches(binding, button, modifiers, clicks)
+        ChartPanel::gesture_matches(binding, button, modifiers, clicks, true)
     };
     assert!(m(
         MouseGestureBinding::LeftShift,
@@ -128,6 +130,50 @@ fn gesture_matching_reads_button_modifiers_and_click_count() {
         ),
         "Ctrl+right must stay a gesture of its own on every platform"
     );
+}
+
+/// FORK: pins the order-book gate on double gestures — a pair with either press on the chart
+/// plot must not match a `*Double` binding, while single-press bindings ignore the flag (their
+/// press has no pair to be inside the book).
+#[test]
+fn double_gestures_require_the_pair_inside_the_book() {
+    for binding in [
+        MouseGestureBinding::LeftDouble,
+        MouseGestureBinding::RightDouble,
+        MouseGestureBinding::LeftCtrlDouble,
+        MouseGestureBinding::LeftShiftDouble,
+        MouseGestureBinding::LeftAltDouble,
+    ] {
+        let (button, modifiers) = match binding {
+            MouseGestureBinding::RightDouble => (TradeMouseButton::Right, Modifiers::default()),
+            MouseGestureBinding::LeftCtrlDouble => (TradeMouseButton::Left, ctrl()),
+            MouseGestureBinding::LeftShiftDouble => (TradeMouseButton::Left, shift()),
+            MouseGestureBinding::LeftAltDouble => (
+                TradeMouseButton::Left,
+                Modifiers {
+                    alt: true,
+                    ..Default::default()
+                },
+            ),
+            _ => (TradeMouseButton::Left, Modifiers::default()),
+        };
+        assert!(
+            ChartPanel::gesture_matches(binding, button, modifiers, 2, true),
+            "{binding:?} must fire with both presses in the book"
+        );
+        assert!(
+            !ChartPanel::gesture_matches(binding, button, modifiers, 2, false),
+            "{binding:?} must not fire when a press of the pair landed on the plot"
+        );
+    }
+    // A single-press binding is not gated: the flag describes a PAIR, which it does not have.
+    assert!(ChartPanel::gesture_matches(
+        MouseGestureBinding::LeftCtrl,
+        TradeMouseButton::Left,
+        ctrl(),
+        1,
+        false
+    ));
 }
 
 /// Pins the MouseMove hot-path thresholds enforced by `hover_probe_due`.
