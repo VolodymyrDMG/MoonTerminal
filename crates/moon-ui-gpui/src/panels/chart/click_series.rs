@@ -17,6 +17,11 @@
 //! second click. Both presses still have to land on THIS panel inside one double-click interval,
 //! and a pan or line drag between them breaks the pair, so a stranger's press still cannot chain
 //! onto a stale first click.
+//!
+//! FORK, second round: an order-placing pair additionally requires BOTH presses inside the pane's
+//! order-book (glass) strip — a double click on the chart plot never trades — and a fired pair
+//! consumes the series and swallows the next [`REARM_MS`] of presses, so a burst of quick clicks
+//! places one order, not one per press ([`ClickSeries::mark_fired`]).
 
 use gpui::MouseButton;
 
@@ -54,6 +59,24 @@ fn double_click_ms() -> f64 {
 /// Only presses that never moved off that spot are affected, so this is not a trading blackout —
 /// anywhere else on the chart, and this same spot after the interval, trade immediately.
 const CLOSE_RESIDUE_MS: f64 = 3_000.0;
+
+/// FORK: how long after a pair PLACED AN ORDER this panel swallows further presses.
+///
+/// The pairing rule chains: in a burst of quick clicks, press three used to pair with press two
+/// and press four with press three, so one excited hand placed three or four orders where the
+/// trader meant one. Consuming the series on fire is not enough — the burst's tail immediately
+/// forms the next pair — so for this long after a fired pair, presses neither extend nor start a
+/// series. The trader asked for exactly this delay; a deliberate second double click arrives
+/// later than this in practice.
+const REARM_MS: f64 = 250.0;
+
+/// FORK: the minimum time between two presses that may form a pair.
+///
+/// A worn mouse switch can fire twice on one physical click, ~10-30 ms apart — faster than any
+/// human double click. Such an echo press must not complete a pair at a spot the trader clicked
+/// ONCE; below this gap the press starts a new series instead (which lands on the same spot, so
+/// a real second click still pairs and trades where it should).
+const PAIR_MIN_GAP_MS: f64 = 40.0;
 
 /// Whether this press is left over from closing a chart rather than aimed at the chart under it.
 ///
@@ -96,12 +119,17 @@ struct Seen {
     own: usize,
     at_ms: f64,
     pos: (f32, f32),
+    /// FORK: whether the press landed in the pane's order-book (glass) strip. An order-placing
+    /// pair requires BOTH presses there; see [`ClickSeries::observe`].
+    in_book: bool,
 }
 
 /// Click-series state for one chart panel.
 #[derive(Default)]
 pub(super) struct ClickSeries {
     last: Option<Seen>,
+    /// FORK: when a pair last placed an order, for the [`REARM_MS`] swallow.
+    fired_at: Option<f64>,
 }
 
 impl ClickSeries {
@@ -112,20 +140,35 @@ impl ClickSeries {
     ///     native: Click count the platform reported, counted per window.
     ///     at_ms: Unix-millisecond time of the press.
     ///     pos: Press position in screen logical pixels.
+    ///     in_book: Whether the press landed in the pane's order-book (glass) strip.
     ///
     /// Returns:
-    ///     1 for a press that starts a series here, or one more than the previous press this panel
-    ///     saw when this press continues that same series.
+    ///     The count this panel gives the press — 1 for a press that starts a series here, one
+    ///     more than the previous press when it continues that series — and whether the pair it
+    ///     completed had BOTH presses inside the order book. The flag is only meaningful at a
+    ///     count of two or more; order placement requires it, so a double click on the chart
+    ///     plot can never trade (the trader pans, draws and reads there).
     pub(super) fn observe(
         &mut self,
         button: MouseButton,
         native: usize,
         at_ms: f64,
         pos: (f32, f32),
-    ) -> usize {
-        let own = match self.last {
-            Some(prev) if prev.continues_into(button, native, at_ms, pos) => prev.own + 1,
-            _ => 1,
+        in_book: bool,
+    ) -> (usize, bool) {
+        // A press hot on the heels of a FIRED pair is the tail of that burst: it must neither
+        // extend the dead series nor seed a new one, or clicks three and four become the next
+        // pair and the next order. The range guards a backwards clock step from latching this.
+        if let Some(fired) = self.fired_at {
+            if (0.0..REARM_MS).contains(&(at_ms - fired)) {
+                return (1, false);
+            }
+        }
+        let (own, pair_in_book) = match self.last {
+            Some(prev) if prev.continues_into(button, native, at_ms, pos) => {
+                (prev.own + 1, prev.in_book && in_book)
+            }
+            _ => (1, false),
         };
         self.last = Some(Seen {
             button,
@@ -133,8 +176,19 @@ impl ClickSeries {
             own,
             at_ms,
             pos,
+            in_book,
         });
-        own
+        (own, pair_in_book)
+    }
+
+    /// FORK: a pair just placed an order — consume the series and start the re-arm window.
+    ///
+    /// Consuming alone is not enough (the burst's next press would start the next pair), and the
+    /// window alone is not enough (the series would sit at two and fire again on press three), so
+    /// both happen here, together, at the only moment an order actually went out.
+    pub(super) fn mark_fired(&mut self, at_ms: f64) {
+        self.fired_at = Some(at_ms);
+        self.last = None;
     }
 
     /// Where the last press landed, if it is recent enough to be the one being handled now.
@@ -199,9 +253,11 @@ impl Seen {
         // close-residue mark keeps receiving real positions and a revert stays one hunk.
         let _ = (native, pos);
         button == self.button
-            // Range rather than `<=`, so a backwards clock step cannot make an ancient press look
-            // like this one's immediate predecessor.
-            && (0.0..=double_click_ms()).contains(&(at_ms - self.at_ms))
+            // A lower bound as well as an upper: faster than any human pair is a mouse switch
+            // echoing one physical click, which must not complete a pair on its own (it starts a
+            // fresh series instead). The range shape also keeps a backwards clock step from
+            // making an ancient press look like this one's immediate predecessor.
+            && (PAIR_MIN_GAP_MS..=double_click_ms()).contains(&(at_ms - self.at_ms))
     }
 }
 
