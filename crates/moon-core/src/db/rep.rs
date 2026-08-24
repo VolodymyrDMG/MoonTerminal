@@ -141,6 +141,14 @@ pub enum DbMsg {
         /// Highest contiguous outbox sequence safely reflected in `valuation.sqlite`.
         through_seq: i64,
     },
+    /// FORK: one CustomEMA log-sweep batch — harvested values plus the file offsets that make the
+    /// sweep incremental. Travels through the sole report writer for the same reason
+    /// [`DbMsg::ValuationAck`] does: `cema_vals` lives in reports.sqlite, and the sweeper thread
+    /// must never open a second write connection to it.
+    Cema {
+        rows: Vec<super::cema::Row>,
+        offsets: Vec<(String, u64)>,
+    },
 }
 
 /// Value exposed to the feed thread as `ReportTx`: a writer channel and per-core start states.
@@ -256,6 +264,10 @@ pub(super) const REP_INDEXES: &[(&str, &[&str])] = &[
         "idx_rep_strategy_close",
         &["core_uid", "strategyid", "closedate"],
     ),
+    // FORK: the CustomEMA harvest — `db::cema` reads one core's deal task ids per sweep, and the
+    // tuner source LEFT-JOINs `cema_vals` by exactly this pair; without it both walk the core's
+    // whole history row by row.
+    ("idx_rep_core_task", &["core_uid", "taskid"]),
 ];
 
 /// Create every [`REP_INDEXES`] entry whose columns the replica already has.
