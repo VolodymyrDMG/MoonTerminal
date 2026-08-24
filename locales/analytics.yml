@@ -1623,3 +1623,7 @@ analytics.purge.core_lost:
   ru: "Ядро пропало со связи — дальше ничего не отправлено."
   en: "The core went offline — nothing further was sent."
   es: "El núcleo se desconectó — no se envió nada más."
+analytics.tuner.grp_cema:
+  ru: "CustomEMA — из логов ядер (только сделки со включённым выражением)"
+  en: "CustomEMA — from core logs (deals whose strategy logs it)"
+  es: "CustomEMA — de logs de núcleos (operaciones que lo registran)"

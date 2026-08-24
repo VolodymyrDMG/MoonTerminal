@@ -576,3 +576,106 @@ fn empty_variant_is_fact() {
     };
     assert!(!v.is_empty());
 }
+
+/// FORK: the harvested CustomEMA columns ride every tuner source — joined by `(core_uid,
+/// taskid)` when `cema_vals` exists — and their variant bounds must DROP unmeasured deals
+/// instead of coalescing them to zero.
+#[test]
+fn cema_values_join_by_core_and_task_and_unmeasured_deals_fail_the_bound() {
+    let conn = Connection::open_in_memory().expect("in-memory database");
+    conn.execute_batch(
+        "CREATE TABLE orders_rep(
+            closedate INTEGER, core_uid INTEGER, taskid INTEGER,
+            profitbtc REAL, spentbtc REAL, basecurrency INTEGER
+         );
+         INSERT INTO orders_rep VALUES (100, 1, 48923, 10.0, 100.0, 1);
+         INSERT INTO orders_rep VALUES (200, 1, 48924, -5.0, 100.0, 1); -- задача без замера
+         INSERT INTO orders_rep VALUES (250, 2, 48923, 7.0, 100.0, 1);  -- другой core, тот же id
+         CREATE TABLE cema_vals(
+            core_uid INTEGER NOT NULL, taskid INTEGER NOT NULL, k TEXT NOT NULL,
+            v REAL NOT NULL, ts INTEGER NOT NULL,
+            PRIMARY KEY (core_uid, taskid, k)
+         ) WITHOUT ROWID;
+         INSERT INTO cema_vals VALUES (1, 48923, 'min12h', 1.64, 0);
+         INSERT INTO cema_vals VALUES (2, 48923, 'min12h', 9.0, 0);",
+    )
+    .expect("cema fixture");
+    let q = Query {
+        from: 1,
+        to: 300,
+        ..Default::default()
+    };
+
+    // The histogram sees exactly the measured deals, each with its own core's value.
+    let hist = histogram_on(&conn, &q, "cema_min12h", 4).expect("histogram");
+    assert_eq!(hist.iter().map(|b| b.n).sum::<i64>(), 2);
+
+    // Fact keeps all three deals; the bound keeps ONLY measured deals in range — the deal whose
+    // strategy never logged the expression must not sneak through as "0.00%".
+    let fact = Variant::default();
+    let low = Variant {
+        bounds: vec![Bound {
+            field: "cema_min12h".into(),
+            from: Some(1.0),
+            to: None,
+        }],
+        ..Default::default()
+    };
+    let high = Variant {
+        bounds: vec![Bound {
+            field: "cema_min12h".into(),
+            from: Some(2.0),
+            to: None,
+        }],
+        ..Default::default()
+    };
+    let stats =
+        variant_stats_on(&conn, &q, &[fact, low, high]).expect("variant stats over the join");
+    assert_eq!(stats[0].n, 3, "the fact column keeps every deal");
+    assert_eq!(stats[1].n, 2, ">=1.0 keeps both measured deals");
+    assert_eq!(stats[1].profit, 17.0, "10.0 of core 1 plus 7.0 of core 2");
+    assert_eq!(stats[2].n, 1, ">=2.0 keeps only the other core's deal");
+    assert_eq!(stats[2].profit, 7.0);
+}
+
+/// FORK: a replica written before the harvest existed (no `cema_vals` table) still serves every
+/// tuner surface — the wrap degrades to NULL columns instead of failing on a missing table.
+#[test]
+fn a_replica_without_cema_tables_still_answers_with_null_columns() {
+    let conn = Connection::open_in_memory().expect("in-memory database");
+    conn.execute_batch(
+        "CREATE TABLE orders_rep(
+            closedate INTEGER, core_uid INTEGER, profitbtc REAL, spentbtc REAL,
+            basecurrency INTEGER
+         );
+         INSERT INTO orders_rep VALUES (100, 1, 10.0, 100.0, 1);",
+    )
+    .expect("bare fixture");
+    let q = Query {
+        from: 1,
+        to: 300,
+        ..Default::default()
+    };
+    let (q, src) = tuner_source_on(&conn, &q).expect("source without cema tables");
+    let (n, nulls): (i64, i64) = conn
+        .query_row(
+            &format!(
+                "SELECT COUNT(*), SUM(o.\"cema_min12h\" IS NULL) FROM {src}"
+            ),
+            rusqlite::params![q.from, q.to],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .expect("the wrapped source must expose the cema columns");
+    assert_eq!((n, nulls), (1, 1));
+    // And a bound on them simply keeps nothing, rather than erroring.
+    let v = Variant {
+        bounds: vec![Bound {
+            field: "cema_btc30s".into(),
+            from: Some(-100.0),
+            to: Some(100.0),
+        }],
+        ..Default::default()
+    };
+    let stats = variant_stats_on(&conn, &q, &[v]).expect("bound over NULL columns");
+    assert_eq!(stats[0].n, 0);
+}

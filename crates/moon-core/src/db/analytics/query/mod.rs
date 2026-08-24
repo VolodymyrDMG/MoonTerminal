@@ -505,6 +505,10 @@ const UNIFIED_COLS: &[&str] = &[
     // `spentbtc == boughtq`). It carries real money, so it belongs in profit — but it is not a
     // trade, and counting it would inflate trade counts, turnover and win rate alike.
     "sellreason",
+    // FORK: the core's task number, the only link between a deal and the log lines of the task
+    // that opened it. `tuner_source_on` joins the harvested CustomEMA values on it; the legacy
+    // table has no such column and projects NULL, so its rows simply carry no values.
+    "taskid",
 ];
 
 /// Money projection resolved by quote coverage before one analytical scan.
@@ -840,10 +844,18 @@ pub(in crate::db) fn unified_from_mode(
     q: &Query,
     mode: ProjectionMode,
 ) -> ReadResult<Option<String>> {
+    // FORK: CustomEMA fields are NOT replica columns — their values come from `cema_vals`, which
+    // `tuner_source_on` LEFT-JOINs around this source. Projecting them here as the automatic
+    // `NULL AS "col"` fallback would collide with the join's own aliases.
     let cols: Vec<&str> = UNIFIED_COLS
         .iter()
         .copied()
-        .chain(super::super::tuner::FIELDS.iter().map(|s| s.col))
+        .chain(
+            super::super::tuner::FIELDS
+                .iter()
+                .filter(|s| s.class != super::super::tuner::FieldClass::CustomEma)
+                .map(|s| s.col),
+        )
         .collect();
     // Attribute LIQUIDATION rows to the strategy named in the row, whenever the strategy
     // database is attached.
