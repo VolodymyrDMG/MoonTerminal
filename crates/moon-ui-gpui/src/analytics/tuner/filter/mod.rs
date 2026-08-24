@@ -1155,6 +1155,7 @@ impl AnalyticsView {
             FieldClass::DeltaSlot => t!("analytics.tuner.grp_slot"),
             FieldClass::Delta => t!("analytics.tuner.grp_delta"),
             FieldClass::Volume => t!("analytics.tuner.grp_volume"),
+            FieldClass::CustomEma => t!("analytics.tuner.grp_cema"),
         }
         .to_string();
         // Subgroup of a MoonBot section (BV/SV in Volumes, the Δ2/Δ3 slots in Deltas):
@@ -1173,7 +1174,9 @@ impl AnalyticsView {
             .border_color(moon_alpha(p.border, 0.7))
             .text_size(design::t_caption(cx))
             .child(div().text_color(moon(p.text_soft)).child(label));
-        if strat.found && !(sub && class != FieldClass::BvSv) {
+        // FORK: CustomEMA has no per-class Ignore flag to toggle — its switch is the expression
+        // string itself, edited in the strategy.
+        if strat.found && class != FieldClass::CustomEma && !(sub && class != FieldClass::BvSv) {
             let (flag, cur_ignore) = flag_of(class, strat);
             let staged = self.tuner.staged_ignore.get(flag).copied();
             let shown = staged.unwrap_or(cur_ignore);
