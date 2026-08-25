@@ -601,6 +601,7 @@ impl ChartTabs {
             this.drain_debug_fill_main_chart(cx);
             this.handle_open_request(true, cx);
             this.handle_open_compare_request(cx);
+            this.handle_open_chart_window_request(cx);
             this.ingest(cx);
             this.drain_chart_repin(cx);
             this.sync_active_scale(cx);
@@ -955,6 +956,22 @@ impl ChartTabs {
                 backend.request_chart_tabs_after_main_open(&group);
                 backend_cx.notify();
             });
+        }
+    }
+
+    /// FORK: drain the arbitrage venue's own-window request — open the coin as a one-chart
+    /// custom tab and immediately detach it into its own OS window. Where detaching is not
+    /// allowed (an Auto workspace), the tab simply stays in the strip: the coin is still open,
+    /// which beats silently dropping the click.
+    fn handle_open_chart_window_request(&mut self, cx: &mut Context<Self>) {
+        let req = self.backend.update(cx, |b, _| {
+            b.take_open_chart_window_request_for_group(self.group.as_str())
+        });
+        if let Some((core, market)) = req {
+            self.open_pairs_in_new_tab(vec![(core, market)], cx);
+            if matches!(self.active, Tab::Custom(..)) {
+                self.detach(self.active.clone(), None, cx);
+            }
         }
     }
 
