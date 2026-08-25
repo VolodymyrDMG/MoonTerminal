@@ -20,8 +20,10 @@
 //!
 //! FORK, second round: an order-placing pair additionally requires BOTH presses inside the pane's
 //! order-book (glass) strip — a double click on the chart plot never trades — and a fired pair
-//! consumes the series and swallows the next [`REARM_MS`] of presses, so a burst of quick clicks
-//! places one order, not one per press ([`ClickSeries::mark_fired`]).
+//! CONSUMES the series ([`ClickSeries::mark_fired`]), so press three starts a fresh pair instead
+//! of chaining onto press two: four quick clicks are two deliberate orders, three are one, and
+//! the old three-or-four-orders-per-burst chaining is gone. The trader asked for exactly this
+//! shape — placing two deals with two quick double clicks must stay easy.
 
 use gpui::MouseButton;
 
@@ -60,23 +62,13 @@ fn double_click_ms() -> f64 {
 /// anywhere else on the chart, and this same spot after the interval, trade immediately.
 const CLOSE_RESIDUE_MS: f64 = 3_000.0;
 
-/// FORK: how long after a pair PLACED AN ORDER this panel swallows further presses.
+/// FORK: the minimum time between two presses before the second click of a pair is recognized.
 ///
-/// The pairing rule chains: in a burst of quick clicks, press three used to pair with press two
-/// and press four with press three, so one excited hand placed three or four orders where the
-/// trader meant one. Consuming the series on fire is not enough — the burst's tail immediately
-/// forms the next pair — so for this long after a fired pair, presses neither extend nor start a
-/// series. The trader asked for exactly this delay; a deliberate second double click arrives
-/// later than this in practice.
-const REARM_MS: f64 = 250.0;
-
-/// FORK: the minimum time between two presses that may form a pair.
-///
-/// A worn mouse switch can fire twice on one physical click, ~10-30 ms apart — faster than any
-/// human double click. Such an echo press must not complete a pair at a spot the trader clicked
-/// ONCE; below this gap the press starts a new series instead (which lands on the same spot, so
-/// a real second click still pairs and trades where it should).
-const PAIR_MIN_GAP_MS: f64 = 40.0;
+/// The trader asked for exactly 20 ms: enough to reject a worn mouse switch echoing one physical
+/// click (~10-15 ms), and comfortably below any deliberate double click, so rapid two-deal
+/// trading is not slowed down. A press faster than this starts a new series instead (landing on
+/// the same spot, so a real second click still pairs and trades where it should).
+const PAIR_MIN_GAP_MS: f64 = 20.0;
 
 /// Whether this press is left over from closing a chart rather than aimed at the chart under it.
 ///
@@ -128,8 +120,6 @@ struct Seen {
 #[derive(Default)]
 pub(super) struct ClickSeries {
     last: Option<Seen>,
-    /// FORK: when a pair last placed an order, for the [`REARM_MS`] swallow.
-    fired_at: Option<f64>,
 }
 
 impl ClickSeries {
@@ -156,14 +146,6 @@ impl ClickSeries {
         pos: (f32, f32),
         in_book: bool,
     ) -> (usize, bool) {
-        // A press hot on the heels of a FIRED pair is the tail of that burst: it must neither
-        // extend the dead series nor seed a new one, or clicks three and four become the next
-        // pair and the next order. The range guards a backwards clock step from latching this.
-        if let Some(fired) = self.fired_at {
-            if (0.0..REARM_MS).contains(&(at_ms - fired)) {
-                return (1, false);
-            }
-        }
         let (own, pair_in_book) = match self.last {
             Some(prev) if prev.continues_into(button, native, at_ms, pos) => {
                 (prev.own + 1, prev.in_book && in_book)
@@ -181,13 +163,10 @@ impl ClickSeries {
         (own, pair_in_book)
     }
 
-    /// FORK: a pair just placed an order — consume the series and start the re-arm window.
-    ///
-    /// Consuming alone is not enough (the burst's next press would start the next pair), and the
-    /// window alone is not enough (the series would sit at two and fire again on press three), so
-    /// both happen here, together, at the only moment an order actually went out.
-    pub(super) fn mark_fired(&mut self, at_ms: f64) {
-        self.fired_at = Some(at_ms);
+    /// FORK: a pair just placed an order — consume the series, so press three starts a fresh
+    /// pair instead of chaining onto press two. Two quick double clicks then place exactly two
+    /// orders; without the consume, clicks three and four each completed a pair of their own.
+    pub(super) fn mark_fired(&mut self, _at_ms: f64) {
         self.last = None;
     }
 

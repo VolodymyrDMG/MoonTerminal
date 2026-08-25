@@ -225,8 +225,9 @@ fn the_pair_reports_book_membership_of_both_presses() {
     }
 }
 
-/// FORK: a mouse switch echoing one physical click, faster than any human pair, must not
-/// complete a pair — it starts a new series on the same spot, so a real second click still pairs.
+/// FORK: a mouse switch echoing one physical click, faster than the 20 ms recognition delay,
+/// must not complete a pair — it starts a new series on the same spot, so a real second click
+/// still pairs.
 #[test]
 fn a_switch_echo_faster_than_any_hand_starts_a_new_series() {
     let mut series = ClickSeries::default();
@@ -234,7 +235,7 @@ fn a_switch_echo_faster_than_any_hand_starts_a_new_series() {
     assert_eq!(
         series.observe(MouseButton::Left, 2, PAIR_MIN_GAP_MS - 1.0, SPOT, true),
         (1, false),
-        "an echo press below the minimum gap must not be the pair's second half"
+        "an echo press below the recognition delay must not be the pair's second half"
     );
     // The echo re-seeded the series, so the trader's REAL second click still trades.
     assert_eq!(
@@ -247,49 +248,39 @@ fn a_switch_echo_faster_than_any_hand_starts_a_new_series() {
         ),
         (2, true)
     );
-}
-
-/// FORK: after a pair fires an order, the burst's remaining presses are swallowed whole — they
-/// neither extend the dead series nor seed a new one, so clicks three and four place nothing.
-#[test]
-fn a_fired_pair_swallows_the_rest_of_the_burst() {
+    // At exactly the delay the press counts: 20 ms is the gate, not a dead zone past it.
     let mut series = ClickSeries::default();
     series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
-    assert_eq!(series.observe(MouseButton::Left, 2, SOON_MS, SPOT, true).0, 2);
-    series.mark_fired(SOON_MS);
-    // Presses three, four and five of the burst, each a pairable gap apart.
-    for i in 1..=3 {
-        let at = SOON_MS + f64::from(i) * SOON_MS;
-        assert_eq!(
-            series.observe(MouseButton::Left, 1, at, SPOT, true),
-            (1, false),
-            "burst press {i} after the fire must not count toward a pair"
-        );
-    }
-    // Even the FIRST press after the window cannot pair with a swallowed one: it starts fresh.
-    let after = SOON_MS + REARM_MS + 1.0;
     assert_eq!(
-        series.observe(MouseButton::Left, 1, after, SPOT, true),
-        (1, false)
-    );
-    // ...but the panel re-arms: a deliberate new double click trades again.
-    assert_eq!(
-        series.observe(MouseButton::Left, 2, after + SOON_MS, SPOT, true),
-        (2, true),
-        "the re-arm window must not leave the panel untradeable"
+        series.observe(MouseButton::Left, 2, PAIR_MIN_GAP_MS, SPOT, true),
+        (2, true)
     );
 }
 
-/// FORK: a backwards wall-clock step during the re-arm window must not latch the swallow on.
+/// FORK: a fired pair consumes the series — press three starts a FRESH pair instead of chaining
+/// onto press two. A four-click burst is therefore two deliberate orders (presses 1+2 and 3+4),
+/// a three-click burst is one, and the old order-per-extra-press chaining cannot happen.
 #[test]
-fn a_clock_step_backwards_does_not_latch_the_rearm_swallow() {
+fn a_fired_pair_consumes_the_series_so_four_clicks_are_two_orders() {
     let mut series = ClickSeries::default();
-    series.mark_fired(10_000.0);
-    series.observe(MouseButton::Left, 1, 10_000.0 - 2.0 * SOON_MS, SPOT, true);
+    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
     assert_eq!(
-        series.observe(MouseButton::Left, 2, 10_000.0 - SOON_MS, SPOT, true),
+        series.observe(MouseButton::Left, 2, SOON_MS, SPOT, true),
         (2, true),
-        "presses before the fire time are not the fired burst's tail"
+        "first pair fires"
+    );
+    series.mark_fired(SOON_MS);
+    // Press three right after: a fresh series, NOT a pair with press two.
+    assert_eq!(
+        series.observe(MouseButton::Left, 3, 2.0 * SOON_MS, SPOT, true),
+        (1, false),
+        "press three must not chain onto the fired pair"
+    );
+    // Press four pairs with press three: the trader's second deliberate double click.
+    assert_eq!(
+        series.observe(MouseButton::Left, 4, 3.0 * SOON_MS, SPOT, true),
+        (2, true),
+        "two quick double clicks must place exactly two orders"
     );
 }
 
