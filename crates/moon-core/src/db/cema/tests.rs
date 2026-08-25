@@ -240,3 +240,69 @@ fn apply_upserts_prunes_and_reports_whether_values_changed() {
         .unwrap();
     assert_eq!(n, 2);
 }
+
+/// The user's own MoonStrike comment, verbatim: the expressions sit mid-sentence between the
+/// detect context and the CPU tail, wrapped in junk parentheses on both sides.
+#[test]
+fn a_moonstrike_comment_yields_its_expression_values() {
+    let comment = " MoonStrike USDT-GRASS <(strategy <StrikeALL-334_0>)>  DetectTime: 12:57:59.926  TradeTime: 12:57:59.938 Latency: 2  LastBID: 0.36505  TradePrice: 0.36300  Depth: 0.56  Vol: 73301.79$ Min(12hours, 1sec) = 6.69%  Min(5hours, 1sec) = 3.16%  Min(45min, 1sec) = 0.93%  BTC(30sec, 1sec) = 0.03%    CPU: Bot 5 (Avg: 3) Sys: 8  AppLatency: 0.0 sec  API Req: 85 / 2400   API Orders: 16 / 1200   Orders 10S: 8 / 300  PriceLag: 0.02% (GRT PriceLag: 0.03%) Latency: 239 / 239  Ping: 11 / 22";
+    assert_eq!(
+        parse_values(comment),
+        vec![
+            ("min12h", 6.69),
+            ("min5h", 3.16),
+            ("min45m", 0.93),
+            ("btc30s", 0.03),
+        ]
+    );
+    // A comment with no known expressions yields nothing — junk parens don't panic the scan.
+    assert!(parse_values("MoonShot BTC (strategy <S>) (Avg: 3) (signal price -2%)").is_empty());
+}
+
+/// The comment scan harvests deal rows past the mark, advances it to the snapshot frontier when
+/// it drains everything, and resumes mid-stream when a chunk fills.
+#[test]
+fn comment_chunks_harvest_deals_and_advance_the_mark() {
+    let conn = Connection::open_in_memory().expect("db");
+    conn.execute_batch(
+        "CREATE TABLE orders_rep(
+            core_uid INTEGER, newrecid INTEGER, taskid INTEGER, comment TEXT,
+            buydate INTEGER, closedate INTEGER
+         );",
+    )
+    .expect("fixture");
+    let now = crate::util::now_unix_ms_i64();
+    let mut ins = |uid: i64, task: i64, comment: &str, buy: i64| {
+        conn.execute(
+            "INSERT INTO orders_rep(core_uid, newrecid, taskid, comment, buydate, closedate)
+             VALUES (?1, ?2, ?3, ?4, ?5, 0)",
+            rusqlite::params![uid, task, task, comment, buy],
+        )
+        .expect("insert");
+    };
+    ins(7, 10, "x Min(45min, 1sec) = 0.50% y", now - 1_000);
+    ins(7, 11, "no expressions here", now - 1_000);
+    // Older than the value retention: skipped, but the mark must still pass it.
+    ins(7, 12, "x Min(45min, 1sec) = 9.99% y", now - (VALS_KEEP_DAYS + 5) * 86_400_000);
+    ins(8, 13, "x BTC(30sec, 1sec) = 0.10% y", now - 2_000);
+
+    let (rows, mark, full) = comment_chunk(&conn, 0, now).expect("chunk");
+    assert!(!full);
+    assert_eq!(
+        rows.iter()
+            .map(|r| (r.core_uid, r.taskid, r.key, r.v))
+            .collect::<Vec<_>>(),
+        vec![(7, 10, "min45m", 0.5), (8, 13, "btc30s", 0.1)]
+    );
+    assert_eq!(mark, 4, "the drained scan parks the mark at the frontier");
+    // Nothing new: an empty drained chunk keeps the mark at the frontier.
+    let (rows, mark, full) = comment_chunk(&conn, mark, now).expect("rescan");
+    assert!(rows.is_empty() && !full);
+    assert_eq!(mark, 4);
+    // A new deal lands: only it is read.
+    ins(7, 14, "x Min(5hours, 1sec) = -1.25% y", now);
+    let (rows, mark, _) = comment_chunk(&conn, mark, now).expect("tail");
+    assert_eq!(rows.len(), 1);
+    assert_eq!((rows[0].taskid, rows[0].key, rows[0].v), (14, "min5h", -1.25));
+    assert_eq!(mark, 5);
+}

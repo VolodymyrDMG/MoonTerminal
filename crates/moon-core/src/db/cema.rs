@@ -9,11 +9,18 @@
 //! `cema_vals` inside reports.sqlite, and the tuner LEFT-JOINs them by `(core_uid, taskid)` (see
 //! `tuner::mod::cema_wrapped`).
 //!
-//! The sweep is the only ingestion path — deliberately file-based rather than a feed hook: the
-//! files survive restarts, so a value logged seconds before a shutdown is still harvested on the
-//! next run, and one mechanism serves both the 14-day backfill on first run and the steady drip
-//! afterwards. The cost of that choice is honesty about its dependency: with file logging
-//! disabled in settings there is nothing to tail and no values appear.
+//! TWO sources feed the same table, both harvested by the sweep:
+//!
+//! 1. The deal's own COMMENT: MoonStrike-family strategies stamp the whole detect context —
+//!    including the evaluated expressions — into the report row's `comment`. That is the best
+//!    source there is: exact, keyed to the deal it describes, and as deep as the report history
+//!    itself, so the first sweep backfills months, not days. Scanned incrementally by rowid
+//!    (the mark rides `cema_scan` under [`COMMENTS_MARK`]); an upsert of an existing row keeps
+//!    its rowid, which is fine — the expressions are stamped at BUY, on the row's first insert.
+//! 2. The per-core LOG files, for strategies whose comments do not carry the values (the bot
+//!    prints an `EMAFilter:` line on every task either way). File-based deliberately — the files
+//!    survive restarts, one mechanism serves the backfill and the steady drip, and with file
+//!    logging disabled in settings this source simply contributes nothing.
 //!
 //! Volume control: only a small fraction of EMAFilter lines belong to tasks that actually bought
 //! (~6k lines/day/core against dozens of deals), so the sweep filters against the replica's
@@ -61,6 +68,16 @@ const SCAN_KEEP_DAYS: i64 = 60;
 /// Log files older than this many days are not swept even if the user keeps files longer:
 /// values older than the tuner's practical horizon are not worth the first-run parse.
 const SWEEP_HORIZON_DAYS: i64 = 45;
+
+/// `cema_scan` key of the deal-comment scan's rowid mark. Underscores sort ABOVE the date-named
+/// log files, so the date-prefix retention cut cannot reach it — and the prune excludes it
+/// explicitly anyway.
+const COMMENTS_MARK: &str = "__comments__";
+
+/// Deal-comment rows read per chunk, and chunks per sweep. Bounds the first run over a
+/// half-million-row replica to a few unnoticeable seconds a minute until the mark catches up.
+const COMMENT_CHUNK: i64 = 20_000;
+const COMMENT_CHUNKS_PER_SWEEP: usize = 3;
 
 /// How long an EMAFilter line may wait for its deal row before the sweep drops it. Covers the
 /// buy-to-upsert gap (seconds) and a report catch-up replaying the recent past after a restart.
@@ -128,11 +145,97 @@ pub(super) fn apply(
         "DELETE FROM cema_vals WHERE ts < ?1",
         [now - VALS_KEEP_DAYS * 86_400_000],
     )?;
-    // File names start with their date, so the lexicographic cut IS the date cut.
+    // File names start with their date, so the lexicographic cut IS the date cut. The comment
+    // mark is excluded by name — its underscores sort above every date anyway, but the intent
+    // deserves to be written down rather than inferred from ASCII.
     if let Some(cut) = date_of_unix_ms(now - SCAN_KEEP_DAYS * 86_400_000) {
-        conn.execute("DELETE FROM cema_scan WHERE file < ?1", [cut])?;
+        conn.execute(
+            "DELETE FROM cema_scan WHERE file < ?1 AND file != ?2",
+            rusqlite::params![cut, COMMENTS_MARK],
+        )?;
     }
     Ok(!rows.is_empty())
+}
+
+/// Read one chunk of deal comments past the rowid mark and harvest their expression values.
+///
+/// The comment is the deal's own record, so no task matching and no server mapping is needed:
+/// `core_uid`, `taskid` and the buy time ride the same row. Rows older than the value retention
+/// are skipped in SQL — parsing them would insert values the same batch immediately prunes.
+///
+/// Args:
+///     conn: Read-only reports connection.
+///     from_rowid: Scan strictly after this rowid.
+///     now_ms: Sweep clock, for the retention cut.
+///
+/// Returns:
+///     Harvested rows, the last rowid seen (the new mark), and whether the chunk was FULL —
+///     `None` when the replica lacks the needed columns or cannot answer.
+fn comment_chunk(
+    conn: &Connection,
+    from_rowid: i64,
+    now_ms: i64,
+) -> Option<(Vec<Row>, i64, bool)> {
+    let cutoff = now_ms - VALS_KEEP_DAYS * 86_400_000;
+    // The frontier is snapshotted BEFORE the read, and the chunk is bounded to it: rows the
+    // retention cut filters out must still advance the mark (or every sweep re-walks them), and
+    // jumping to a frontier read AFTER the chunk would skip rows the writer landed mid-sweep.
+    let frontier: i64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(rowid), ?1) FROM orders_rep",
+            [from_rowid],
+            |r| r.get(0),
+        )
+        .ok()?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT rowid, core_uid, taskid, comment,
+                    COALESCE(NULLIF(buydate, 0), NULLIF(closedate, 0), 0)
+             FROM orders_rep
+             WHERE rowid > ?1 AND rowid <= ?2 AND taskid > 0 AND comment IS NOT NULL
+               AND instr(comment, '(') > 0
+               AND COALESCE(NULLIF(buydate, 0), NULLIF(closedate, 0), 0) >= ?3
+             ORDER BY rowid LIMIT ?4",
+        )
+        .ok()?;
+    let mut rows_out: Vec<Row> = Vec::new();
+    let mut last = from_rowid;
+    let mut seen = 0i64;
+    let found = stmt
+        .query_map(
+            rusqlite::params![from_rowid, frontier, cutoff, COMMENT_CHUNK],
+            |r| {
+                Ok((
+                    r.get::<_, i64>(0)?,
+                    r.get::<_, i64>(1)?,
+                    r.get::<_, i64>(2)?,
+                    r.get::<_, String>(3)?,
+                    r.get::<_, i64>(4)?,
+                ))
+            },
+        )
+        .ok()?;
+    for row in found.flatten() {
+        let (rowid, core_uid, taskid, comment, ts) = row;
+        last = last.max(rowid);
+        seen += 1;
+        for (key, v) in parse_values(&comment) {
+            rows_out.push(Row {
+                core_uid: core_uid as u64,
+                taskid,
+                key,
+                v,
+                ts,
+            });
+        }
+    }
+    let full = seen >= COMMENT_CHUNK;
+    if !full {
+        // Everything up to the frontier is decided: matched rows are harvested above, the rest
+        // carry nothing worth returning for.
+        last = last.max(frontier);
+    }
+    Some((rows_out, last, full))
 }
 
 /// The value key for one logged expression, or `None` for an expression the tuner does not carry.
@@ -170,8 +273,20 @@ pub fn parse_emafilter(msg: &str) -> Option<(i64, Vec<(&'static str, f64)>)> {
     let close = head.rfind(')')?;
     let open = head[..close].rfind('(')?;
     let taskid: i64 = head[open + 1..close].trim().parse().ok()?;
+    let vals = parse_values(&msg[marker + "EMAFilter:".len()..]);
+    (!vals.is_empty()).then_some((taskid, vals))
+}
+
+/// Scan free text for `Func(window, granularity) = value%` expressions the tuner carries.
+///
+/// Shared by the log-line parser and the deal-comment parser: a MoonStrike comment embeds the
+/// expressions mid-sentence between `Vol: … $` and `CPU: …`, so this scans EVERY parenthesis and
+/// keeps only the shapes it knows. Junk parentheses (`(strategy <X>)`, `(-4.2% depth)`,
+/// `(Avg: 3)`) fail the `= value%` tail or the name test and are skipped without derailing the
+/// scan; a repeated expression keeps its LAST value.
+pub fn parse_values(text: &str) -> Vec<(&'static str, f64)> {
     let mut vals: Vec<(&'static str, f64)> = Vec::new();
-    let mut rest = &msg[marker + "EMAFilter:".len()..];
+    let mut rest = text;
     while let Some(par) = rest.find('(') {
         // The function name is the alphanumeric run touching the parenthesis.
         let name_at = rest[..par]
@@ -207,7 +322,7 @@ pub fn parse_emafilter(msg: &str) -> Option<(i64, Vec<(&'static str, f64)>)> {
         }
         rest = &rest[next..];
     }
-    (!vals.is_empty()).then_some((taskid, vals))
+    vals
 }
 
 /// Split one FILE line into `(milliseconds of day, message)`.
@@ -427,6 +542,33 @@ pub fn sweep_and_send(servers: &[SweepServer], sink: &super::ReportSink) {
         rows.extend(take.rows);
         if take.next_off != from_off {
             offsets.push((name.to_string(), take.next_off));
+        }
+    }
+    // Source two: the deals' own comments, scanned incrementally by rowid. Bounded per sweep so
+    // the first pass over a large replica spreads across a few minutes instead of one long stall.
+    {
+        let mut mark = conn
+            .query_row(
+                "SELECT off FROM cema_scan WHERE file = ?1",
+                [COMMENTS_MARK],
+                |r| r.get::<_, i64>(0),
+            )
+            .ok()
+            .unwrap_or(0)
+            .max(0);
+        let start = mark;
+        for _ in 0..COMMENT_CHUNKS_PER_SWEEP {
+            let Some((chunk_rows, last, full)) = comment_chunk(&conn, mark, now_ms) else {
+                break; // No comment/taskid columns yet — a fresh replica contributes later.
+            };
+            rows.extend(chunk_rows);
+            mark = mark.max(last);
+            if !full {
+                break;
+            }
+        }
+        if mark > start {
+            offsets.push((COMMENTS_MARK.to_string(), mark as u64));
         }
     }
     if rows.is_empty() && offsets.is_empty() {
