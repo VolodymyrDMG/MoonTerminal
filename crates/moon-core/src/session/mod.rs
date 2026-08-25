@@ -143,7 +143,13 @@ pub struct SessionManager {
     /// core itself in per-core mode.
     core_provider: HashMap<CoreId, CoreId>,
     /// Exchange-to-selected-provider mapping for retention and failover in deduplicated mode.
-    providers: HashMap<ExchangeId, CoreId>,
+    ///
+    /// FORK: keyed by `(venue, base currency)` rather than the venue alone. A core serves ONE
+    /// quote's market universe (a USDT bot and a USDC bot on the same exchange trade disjoint
+    /// catalogs), so electing one provider per venue handed USDC markets to a USDT core that
+    /// cannot serve them: books and trades died as soon as the USDT core won an election —
+    /// exactly the HIP-3 DEX problem `ExchangeId::dex` already solves, one field further out.
+    providers: HashMap<(ExchangeId, String), CoreId>,
     /// Provider-to-served-markets mapping: the union of open charts and lingering markets.
     wanted: HashMap<CoreId, HashSet<String>>,
     /// Deadline for releasing each `(provider, market)` after its last chart closes.
