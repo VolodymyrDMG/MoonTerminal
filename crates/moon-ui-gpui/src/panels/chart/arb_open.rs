@@ -1,9 +1,10 @@
 //! Clicking an arbitrage venue's name: open THIS coin on THAT exchange.
 //!
 //! The column already answers "what does this coin cost elsewhere"; the obvious next question is
-//! "show me". A left click opens the coin on the other exchange, a right click opens it in a
-//! comparison tab, and when several cores are connected to that exchange the choice is a picker —
-//! the same shape the News panel uses for the same problem.
+//! "show me". FORK: a left click opens the coin on the other exchange in its OWN WINDOW, while
+//! Ctrl(Cmd)+left and the right click open it in a comparison tab beside the current chart; when
+//! several cores are connected to that exchange the choice is a picker — the same shape the News
+//! panel uses for the same problem.
 //!
 //! How a venue is matched to a core: an arbitrage platform code IS the core's platform ordinal for
 //! an ordinary exchange (`ArbPlatformCode::from_exchange` is a byte copy), so the two compare
@@ -66,8 +67,9 @@ impl ChartPanel {
 /// What a click on a venue name does.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum ArbOpen {
-    /// Open the coin on that exchange, as a coin click anywhere else does.
-    Chart,
+    /// FORK: open the coin on that exchange in its OWN OS WINDOW (a one-chart custom tab,
+    /// detached by the strip that drains the request).
+    Window,
     /// Open it beside the current one, in a comparison tab.
     Compare,
 }
@@ -210,9 +212,9 @@ impl ChartPanel {
         let group = self.workspace_group.clone();
         self.backend.update(cx, |b, bcx| {
             let done = match mode {
-                ArbOpen::Chart => {
-                    // `false`: opened without stealing focus, like every other coin-navigation site.
-                    b.open_on_main_if_authorized(group.as_deref(), (core, market), false)
+                // FORK: the venue's left click asks for a separate window, not a Main takeover.
+                ArbOpen::Window => {
+                    b.open_chart_window_if_authorized(group.as_deref(), (core, market))
                 }
                 // BOTH sides: a comparison of one chart is not a comparison, and the chart the
                 // click came from is half the question. Clicking a second venue from inside that
