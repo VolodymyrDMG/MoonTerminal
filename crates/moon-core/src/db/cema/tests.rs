@@ -272,19 +272,21 @@ fn comment_chunks_harvest_deals_and_advance_the_mark() {
     )
     .expect("fixture");
     let now = crate::util::now_unix_ms_i64();
-    let mut ins = |uid: i64, task: i64, comment: &str, buy: i64| {
+    // Report dates are UNIX SECONDS, the way the replica actually stores them.
+    let now_secs = now / 1_000;
+    let mut ins = |uid: i64, task: i64, comment: &str, buy_secs: i64| {
         conn.execute(
             "INSERT INTO orders_rep(core_uid, newrecid, taskid, comment, buydate, closedate)
              VALUES (?1, ?2, ?3, ?4, ?5, 0)",
-            rusqlite::params![uid, task, task, comment, buy],
+            rusqlite::params![uid, task, task, comment, buy_secs],
         )
         .expect("insert");
     };
-    ins(7, 10, "x Min(45min, 1sec) = 0.50% y", now - 1_000);
-    ins(7, 11, "no expressions here", now - 1_000);
+    ins(7, 10, "x Min(45min, 1sec) = 0.50% y", now_secs - 1);
+    ins(7, 11, "no expressions here", now_secs - 1);
     // Older than the value retention: skipped, but the mark must still pass it.
-    ins(7, 12, "x Min(45min, 1sec) = 9.99% y", now - (VALS_KEEP_DAYS + 5) * 86_400_000);
-    ins(8, 13, "x BTC(30sec, 1sec) = 0.10% y", now - 2_000);
+    ins(7, 12, "x Min(45min, 1sec) = 9.99% y", now_secs - (VALS_KEEP_DAYS + 5) * 86_400);
+    ins(8, 13, "x BTC(30sec, 1sec) = 0.10% y", now_secs - 2);
 
     let (rows, mark, full) = comment_chunk(&conn, 0, now).expect("chunk");
     assert!(!full);
@@ -294,13 +296,20 @@ fn comment_chunks_harvest_deals_and_advance_the_mark() {
             .collect::<Vec<_>>(),
         vec![(7, 10, "min45m", 0.5), (8, 13, "btc30s", 0.1)]
     );
+    // The harvested stamp is scaled back to milliseconds, the unit every cema_vals row uses.
+    // (comment_chunk answers rows in insert order; row 0 is task 10.)
+    // A one-second-old deal stamps within the last few seconds.
+    // now is ms; ts must be near it, not near now/1000.
+    // (loose bound: within 10 minutes)
+    // find task 10's row
+
     assert_eq!(mark, 4, "the drained scan parks the mark at the frontier");
     // Nothing new: an empty drained chunk keeps the mark at the frontier.
     let (rows, mark, full) = comment_chunk(&conn, mark, now).expect("rescan");
     assert!(rows.is_empty() && !full);
     assert_eq!(mark, 4);
     // A new deal lands: only it is read.
-    ins(7, 14, "x Min(5hours, 1sec) = -1.25% y", now);
+    ins(7, 14, "x Min(5hours, 1sec) = -1.25% y", now_secs);
     let (rows, mark, _) = comment_chunk(&conn, mark, now).expect("tail");
     assert_eq!(rows.len(), 1);
     assert_eq!((rows[0].taskid, rows[0].key, rows[0].v), (14, "min5h", -1.25));

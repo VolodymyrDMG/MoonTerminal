@@ -97,7 +97,19 @@ pub(super) fn init(conn: &Connection) -> rusqlite::Result<()> {
          CREATE TABLE IF NOT EXISTS cema_scan (
              file TEXT PRIMARY KEY,
              off INTEGER NOT NULL
-         ) WITHOUT ROWID;",
+         ) WITHOUT ROWID;
+         -- Same DDL as init_db: normally app_meta already exists, but this module must also
+         -- initialize a bare connection (tests, tools) without ordering assumptions.
+         CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+         -- One-time repair, flagged in app_meta so it runs ONCE: the first comment pass
+         -- compared SECOND-valued buy dates against a millisecond cutoff, harvested nothing,
+         -- and still parked its mark at the frontier. Dropping the mark makes the fixed pass
+         -- re-read the whole history; the upserts are idempotent, so rows the log sweep
+         -- already owns are simply confirmed.
+         DELETE FROM cema_scan
+          WHERE file = '__comments__'
+            AND NOT EXISTS (SELECT 1 FROM app_meta WHERE key = 'cema_secs_fix');
+         INSERT OR IGNORE INTO app_meta(key, value) VALUES('cema_secs_fix', '1');",
     )
 }
 
@@ -176,7 +188,12 @@ fn comment_chunk(
     from_rowid: i64,
     now_ms: i64,
 ) -> Option<(Vec<Row>, i64, bool)> {
-    let cutoff = now_ms - VALS_KEEP_DAYS * 86_400_000;
+    // Report dates are UNIX SECONDS (see `analytics::time_zone` and the valuation worker's
+    // `closedate.div_euclid(60)`), so the retention cut is applied in seconds and the harvested
+    // stamp is scaled to the milliseconds every other `cema_vals` row uses. The first version
+    // compared seconds against a millisecond cutoff, called every deal ancient, and harvested
+    // NOTHING — see the mark repair in `init`.
+    let cutoff_secs = now_ms / 1_000 - VALS_KEEP_DAYS * 86_400;
     // The frontier is snapshotted BEFORE the read, and the chunk is bounded to it: rows the
     // retention cut filters out must still advance the mark (or every sweep re-walks them), and
     // jumping to a frontier read AFTER the chunk would skip rows the writer landed mid-sweep.
@@ -203,7 +220,7 @@ fn comment_chunk(
     let mut seen = 0i64;
     let found = stmt
         .query_map(
-            rusqlite::params![from_rowid, frontier, cutoff, COMMENT_CHUNK],
+            rusqlite::params![from_rowid, frontier, cutoff_secs, COMMENT_CHUNK],
             |r| {
                 Ok((
                     r.get::<_, i64>(0)?,
@@ -216,7 +233,7 @@ fn comment_chunk(
         )
         .ok()?;
     for row in found.flatten() {
-        let (rowid, core_uid, taskid, comment, ts) = row;
+        let (rowid, core_uid, taskid, comment, ts_secs) = row;
         last = last.max(rowid);
         seen += 1;
         for (key, v) in parse_values(&comment) {
@@ -225,7 +242,7 @@ fn comment_chunk(
                 taskid,
                 key,
                 v,
-                ts,
+                ts: ts_secs * 1_000,
             });
         }
     }
@@ -519,7 +536,7 @@ pub fn sweep_and_send(servers: &[SweepServer], sink: &super::ReportSink) {
             let mut set = HashSet::new();
             let Ok(mut stmt) = conn.prepare(
                 "SELECT DISTINCT taskid FROM orders_rep
-                 WHERE core_uid = ?1 AND taskid IS NOT NULL",
+                 WHERE core_uid = ?1 AND taskid > 0",
             ) else {
                 return set;
             };
