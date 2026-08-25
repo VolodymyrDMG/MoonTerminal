@@ -163,16 +163,31 @@ impl SessionManager {
     }
 
     /// Rebuild `core_provider` (core to provider core) and `providers` (exchange to provider).
-    /// `Dedup` prefers one Ready core per exchange, retaining the current Ready provider when
-    /// possible and falling back to the exchange's first available core when none are Ready. In
+    /// `Dedup` prefers one Ready core per group, retaining the current Ready provider when
+    /// possible and falling back to the group's first available core when none are Ready. In
     /// `PerCore`, every core is its own provider.
+    ///
+    /// FORK: the election group is `(venue, base currency)`, not the venue alone. A MoonBot core
+    /// serves exactly one quote's market universe — a Binance-spot USDT bot and a Binance-spot
+    /// USDC bot trade DISJOINT catalogs — so a shared provider left one side's order books and
+    /// trades unservable the moment its core lost an election (books alive right after connect,
+    /// dead after the first failover, detects still flowing: the account plane is per-core).
+    /// The base currency arrives in the same BaseCheck as the identity (`FeedMsg::CoreBase`);
+    /// a core that never reports one groups under the empty string, which restores the old
+    /// venue-wide behavior for such cores alone.
     fn reconcile_providers(&mut self) {
-        // Snapshot `(id, exchange, Ready?)` so later mutations do not retain borrows of `self`.
-        let infos: Vec<(CoreId, Option<ExchangeId>, bool)> = self
+        // Snapshot `(id, election key, Ready?)` so later mutations do not retain borrows of
+        // `self`.
+        let infos: Vec<(CoreId, Option<(ExchangeId, String)>, bool)> = self
             .sessions
             .iter()
             .map(|s| {
-                let key = self.core_venue.get(&s.id).map(|venue| venue.id);
+                let key = self.core_venue.get(&s.id).map(|venue| {
+                    (
+                        venue.id,
+                        self.core_base.get(&s.id).cloned().unwrap_or_default(),
+                    )
+                });
                 let ready = self
                     .store
                     .core(s.id)
@@ -192,11 +207,11 @@ impl SessionManager {
                 self.providers.clear();
             }
             MarketDataMode::Dedup => {
-                // Group cores by exchange, excluding cores whose exchange identity is unknown.
-                let mut by_key: HashMap<ExchangeId, Vec<CoreId>> = HashMap::new();
+                // Group cores by `(exchange, base)`, excluding cores whose identity is unknown.
+                let mut by_key: HashMap<(ExchangeId, String), Vec<CoreId>> = HashMap::new();
                 for (id, key, _) in &infos {
                     if let Some(k) = key {
-                        by_key.entry(*k).or_default().push(*id);
+                        by_key.entry(k.clone()).or_default().push(*id);
                     }
                 }
                 let ready_of = |id: CoreId| {
@@ -207,8 +222,8 @@ impl SessionManager {
                         .unwrap_or(false)
                 };
                 // Keep the current provider when it is present and Ready; otherwise choose the
-                // exchange's first Ready core, falling back to its first core of any status.
-                let mut elected: HashMap<ExchangeId, CoreId> = HashMap::new();
+                // group's first Ready core, falling back to its first core of any status.
+                let mut elected: HashMap<(ExchangeId, String), CoreId> = HashMap::new();
                 for (k, cores) in &by_key {
                     let cur = self.providers.get(k).copied();
                     let keep = cur.filter(|c| cores.contains(c) && ready_of(*c));
@@ -216,7 +231,7 @@ impl SessionManager {
                         .or_else(|| cores.iter().copied().find(|c| ready_of(*c)))
                         .or_else(|| cores.first().copied());
                     if let Some(p) = chosen {
-                        elected.insert(*k, p);
+                        elected.insert(k.clone(), p);
                         for &c in cores {
                             new_core_provider.insert(c, p);
                         }
