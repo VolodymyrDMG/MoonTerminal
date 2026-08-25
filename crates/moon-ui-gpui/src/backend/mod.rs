@@ -974,14 +974,21 @@ impl Backend {
     }
 
     /// FORK: ask for the coin on another exchange in ITS OWN WINDOW — the arbitrage venue's
-    /// left click. Same authority rules as a comparison; the group's ChartTabs consumes it by
-    /// opening a one-coin custom tab and detaching it.
+    /// left click. This is NAVIGATION, not trading: the target is BY DESIGN a core of another
+    /// exchange, usually of another GROUP, so no workspace-rail test applies here — the only
+    /// requirement is that the core is actually connected. Trading from the opened chart still
+    /// passes every per-dispatch authority guard it always did.
     pub(crate) fn open_chart_window_if_authorized(
         &mut self,
         group: Option<&str>,
         target: (CoreId, String),
     ) -> bool {
-        if !self.workspace_action_allows_core(group, target.0) {
+        if !self
+            .session
+            .sessions()
+            .iter()
+            .any(|session| session.id == target.0)
+        {
             return false;
         }
         self.open_chart_window_request =
@@ -990,27 +997,36 @@ impl Backend {
         true
     }
 
-    /// FORK: revalidate and drain one own-window request for its live authorized group.
+    /// FORK: whether one group may consume the own-window request.
+    ///
+    /// The ISSUING group consumes it — the window belongs where the click happened, and the
+    /// target core's own group (the rule the comparison request lives by) is usually a DIFFERENT
+    /// exchange's group whose ChartTabs may not even exist. An unscoped request (a chart with no
+    /// group) falls back to the target's live group, so somebody drains it.
+    fn chart_window_request_consumable(&self, group: &str) -> bool {
+        let Some(request) = self.open_chart_window_request.as_ref() else {
+            return false;
+        };
+        match request.authority_group.as_deref() {
+            Some(authority) => authority == group,
+            None => {
+                let (core, _) = &request.target;
+                self.session
+                    .sessions()
+                    .iter()
+                    .find(|session| session.id == *core)
+                    .map(|session| session.group.as_str())
+                    == Some(group)
+            }
+        }
+    }
+
+    /// FORK: drain one own-window request for the group that may consume it.
     pub(crate) fn take_open_chart_window_request_for_group(
         &mut self,
         group: &str,
     ) -> Option<(CoreId, String)> {
-        let request = self.open_chart_window_request.as_ref()?;
-        let (core, _) = &request.target;
-        let live_group = self
-            .session
-            .sessions()
-            .iter()
-            .find(|session| session.id == *core)
-            .map(|session| session.group.as_str());
-        let workspace_allowed = request
-            .authority_group
-            .as_deref()
-            .is_none_or(|authority| self.workspace_action_allows_core(Some(authority), *core));
-        if !request.allows_group(group, live_group, workspace_allowed) {
-            if request.authority_group.is_some() {
-                self.open_chart_window_request = None;
-            }
+        if !self.chart_window_request_consumable(group) {
             return None;
         }
         self.open_chart_window_request
@@ -1020,21 +1036,7 @@ impl Backend {
 
     /// FORK: the own-window revision, only for the group that may consume the request.
     pub(crate) fn pending_open_chart_window_revision_for_group(&self, group: &str) -> u64 {
-        let Some(request) = self.open_chart_window_request.as_ref() else {
-            return 0;
-        };
-        let (core, _) = &request.target;
-        let live_group = self
-            .session
-            .sessions()
-            .iter()
-            .find(|session| session.id == *core)
-            .map(|session| session.group.as_str());
-        let workspace_allowed = request
-            .authority_group
-            .as_deref()
-            .is_none_or(|authority| self.workspace_action_allows_core(Some(authority), *core));
-        if request.allows_group(group, live_group, workspace_allowed) {
+        if self.chart_window_request_consumable(group) {
             self.open_chart_window_request_rev
         } else {
             0
@@ -1065,7 +1067,11 @@ impl Backend {
             .authority_group
             .as_deref()
             .is_none_or(|authority| self.workspace_action_allows_core(Some(authority), *core));
-        if !request.allows_group(group, live_group, workspace_allowed) {
+        // FORK: the arbitrage venue's comparison targets a core of ANOTHER exchange — usually
+        // another group, whose ChartTabs may not exist. The group that ISSUED the request may
+        // consume it too; the workspace revalidation still applies, so an Auto rail keeps its say.
+        let issuer_may = request.authority_group.as_deref() == Some(group) && workspace_allowed;
+        if !(request.allows_group(group, live_group, workspace_allowed) || issuer_may) {
             if request.authority_group.is_some() {
                 self.open_compare_request = None;
             }
@@ -1098,7 +1104,9 @@ impl Backend {
             .authority_group
             .as_deref()
             .is_none_or(|authority| self.workspace_action_allows_core(Some(authority), *core));
-        if request.allows_group(group, live_group, workspace_allowed) {
+        // FORK: mirrors the taker — the issuing group observes its own cross-exchange request.
+        let issuer_may = request.authority_group.as_deref() == Some(group) && workspace_allowed;
+        if request.allows_group(group, live_group, workspace_allowed) || issuer_may {
             self.open_compare_request_rev
         } else {
             0
