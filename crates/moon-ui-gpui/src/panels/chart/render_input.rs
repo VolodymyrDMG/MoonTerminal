@@ -226,8 +226,22 @@ pub(super) fn mouse_down_left(
     // A click on an arbitrage venue's NAME opens this coin there, and it is checked first: the name
     // is a small, unambiguous target drawn over the plot, and falling through would place an order
     // under it. Nothing else on the chart claims that rectangle.
+    //
+    // FORK: a plain left click opens the coin in its OWN WINDOW (the trader's ask — "перекинуть в
+    // новое окно"); Ctrl (or Cmd) + left opens the two-chart comparison the right click also
+    // offers, so both reachings live on the mouse's primary button.
     if within
-        && this.try_open_arb_venue(pos, e.position, super::arb_open::ArbOpen::Chart, window, cx)
+        && this.try_open_arb_venue(
+            pos,
+            e.position,
+            if e.modifiers.control || e.modifiers.platform {
+                super::arb_open::ArbOpen::Compare
+            } else {
+                super::arb_open::ArbOpen::Window
+            },
+            window,
+            cx,
+        )
     {
         cx.notify();
         cx.stop_propagation();

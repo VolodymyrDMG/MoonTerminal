@@ -997,6 +997,74 @@ impl Backend {
         true
     }
 
+    /// FORK: ask for the coin on another exchange in ITS OWN WINDOW — the arbitrage venue's
+    /// left click. Same authority rules as a comparison; the group's ChartTabs consumes it by
+    /// opening a one-coin custom tab and detaching it.
+    pub(crate) fn open_chart_window_if_authorized(
+        &mut self,
+        group: Option<&str>,
+        target: (CoreId, String),
+    ) -> bool {
+        if !self.workspace_action_allows_core(group, target.0) {
+            return false;
+        }
+        self.open_chart_window_request =
+            Some(OpenCompareRequest::new(target, group.map(str::to_string)));
+        self.open_chart_window_request_rev = self.open_chart_window_request_rev.wrapping_add(1);
+        true
+    }
+
+    /// FORK: revalidate and drain one own-window request for its live authorized group.
+    pub(crate) fn take_open_chart_window_request_for_group(
+        &mut self,
+        group: &str,
+    ) -> Option<(CoreId, String)> {
+        let request = self.open_chart_window_request.as_ref()?;
+        let (core, _) = &request.target;
+        let live_group = self
+            .session
+            .sessions()
+            .iter()
+            .find(|session| session.id == *core)
+            .map(|session| session.group.as_str());
+        let workspace_allowed = request
+            .authority_group
+            .as_deref()
+            .is_none_or(|authority| self.workspace_action_allows_core(Some(authority), *core));
+        if !request.allows_group(group, live_group, workspace_allowed) {
+            if request.authority_group.is_some() {
+                self.open_chart_window_request = None;
+            }
+            return None;
+        }
+        self.open_chart_window_request
+            .take()
+            .map(|request| request.target)
+    }
+
+    /// FORK: the own-window revision, only for the group that may consume the request.
+    pub(crate) fn pending_open_chart_window_revision_for_group(&self, group: &str) -> u64 {
+        let Some(request) = self.open_chart_window_request.as_ref() else {
+            return 0;
+        };
+        let (core, _) = &request.target;
+        let live_group = self
+            .session
+            .sessions()
+            .iter()
+            .find(|session| session.id == *core)
+            .map(|session| session.group.as_str());
+        let workspace_allowed = request
+            .authority_group
+            .as_deref()
+            .is_none_or(|authority| self.workspace_action_allows_core(Some(authority), *core));
+        if request.allows_group(group, live_group, workspace_allowed) {
+            self.open_chart_window_request_rev
+        } else {
+            0
+        }
+    }
+
     /// Revalidate and drain one comparison request only for its live authorized group.
     ///
     /// Args:
