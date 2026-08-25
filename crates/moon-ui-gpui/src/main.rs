@@ -162,9 +162,13 @@ struct Backend {
     /// The detect's market anchors the tab alongside that market from other group cores,
     /// deduplicated by exchange, with lock and clear controls. See `open_compare_tab`.
     open_compare_request: Option<backend::OpenCompareRequest>,
+    /// FORK: an arbitrage venue's left click — open the coin on that exchange in its OWN WINDOW.
+    /// The same request/authority shape as the comparison above, drained by the group's ChartTabs.
+    open_chart_window_request: Option<backend::OpenCompareRequest>,
     /// Revision of `open_compare_request`, waking `ChartTabs` through its signature like the
     /// atomic Main-open request revision.
     open_compare_request_rev: u64,
+    open_chart_window_request_rev: u64,
     /// Diagnostic chart auto-open for runtime counters, disabled by default and enabled only by
     /// the `MOON_RENDER_DIAG_OPEN_FIRST_MARKET` environment variable.
     diag_open_first_market: bool,
