@@ -18,6 +18,11 @@ pub(super) fn chart_tabs_sig(b: &Backend, group: &str) -> u64 {
     if compare_revision != 0 {
         sig = sig.wrapping_mul(31).wrapping_add(compare_revision);
     }
+    // FORK: the arbitrage venue's own-window request rides the same observer wake.
+    let window_revision = b.pending_open_chart_window_revision_for_group(group);
+    if window_revision != 0 {
+        sig = sig.wrapping_mul(31).wrapping_add(window_revision);
+    }
     sig = sig
         .wrapping_mul(31)
         .wrapping_add(u64::from(b.config.charts_split_by_core));
