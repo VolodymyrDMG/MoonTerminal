@@ -117,13 +117,8 @@ impl ChartPanel {
         button: TradeMouseButton,
         modifiers: Modifiers,
         click_count: usize,
-        pair_in_book: bool,
     ) -> bool {
-        // FORK: a double-click ORDER pair must have both presses inside the order-book strip —
-        // the chart plot is for panning, drawing and reading, and a double click there placing a
-        // market entry was the costliest misfire this panel had. Move gestures pass `true`: they
-        // re-aim EXISTING orders and are safe anywhere on the pane.
-        let dbl = click_count >= 2 && pair_in_book;
+        let dbl = click_count >= 2;
         let clear = !modifiers.modified();
         // Ctrl+Left needs no macOS special case HERE, but it did need one in the fork: Zed's mac
         // backend rewrote a Control+left press into a right click and erased the Control flag, so
@@ -173,16 +168,11 @@ impl ChartPanel {
     /// `click_count` must be the count from this panel's own [`super::ClickSeries`], never the
     /// window's native one: the native count pairs presses by time and distance across the whole
     /// window, so a press arriving here right after a chart closed elsewhere carries a two.
-    /// `pair_in_book` comes from the same series and gates the DOUBLE gestures: both presses of
-    /// the pair must have landed in the order-book strip, so clicks on the chart plot never place
-    /// an order. The caller marks the series fired when this returns `true`, which is what keeps a
-    /// burst of quick clicks down to one order.
     pub(super) fn try_place_order_click(
         &mut self,
         button: TradeMouseButton,
         modifiers: Modifiers,
         click_count: usize,
-        pair_in_book: bool,
         pos: (f32, f32),
         cx: &mut Context<Self>,
     ) -> bool {
@@ -202,20 +192,13 @@ impl ChartPanel {
         let short = {
             let b = self.backend.read(cx);
             let cfg = b.preview.as_ref().unwrap_or(&b.config);
-            if Self::gesture_matches(
-                cfg.hotkeys.buy_set_click,
-                button,
-                modifiers,
-                click_count,
-                pair_in_book,
-            ) {
+            if Self::gesture_matches(cfg.hotkeys.buy_set_click, button, modifiers, click_count) {
                 Some(false)
             } else if Self::gesture_matches(
                 cfg.hotkeys.short_set_click,
                 button,
                 modifiers,
                 click_count,
-                pair_in_book,
             ) {
                 Some(true)
             } else {
@@ -266,7 +249,7 @@ impl ChartPanel {
             let b = self.backend.read(cx);
             let cfg = b.preview.as_ref().unwrap_or(&b.config);
             cfg.hotkeys.resolve_move_gesture(|binding| {
-                Self::gesture_matches(binding, button, modifiers, click_count, true)
+                Self::gesture_matches(binding, button, modifiers, click_count)
             })
         };
         let Some(command) = command else {

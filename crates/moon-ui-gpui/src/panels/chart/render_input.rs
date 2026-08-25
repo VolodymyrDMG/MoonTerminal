@@ -37,8 +37,7 @@ use super::trade::TradeMouseButton;
 ///     window: Window the press arrived in, for its screen origin.
 ///
 /// Returns:
-///     The click count belonging to this panel plus whether the pair it completed had both
-///     presses inside the order-book strip (see [`super::ClickSeries`]), or `None` when the
+///     The click count belonging to this panel (see [`super::ClickSeries`]), or `None` when the
 ///     press is left over from closing a chart and must not trade at all.
 fn press_count(
     this: &mut ChartPanel,
@@ -47,7 +46,7 @@ fn press_count(
     position: Point<Pixels>,
     window: &Window,
     cx: &mut Context<ChartPanel>,
-) -> Option<(usize, bool)> {
+) -> Option<usize> {
     let now = moon_chart::paint::now_unix_ms();
     // `bounds()`, not `window_bounds()`: the latter is the RESTORE rectangle, which for a maximized
     // window names a position it is not at — and this position is compared against a mark every
@@ -57,12 +56,7 @@ fn press_count(
         f32::from(origin.x + position.x),
         f32::from(origin.y + position.y),
     );
-    // The book test uses the GLASS geometry, not `window_pos_in_control_zone`: the latter is
-    // defined to answer false under unified zones, where the strip must still be the only place a
-    // double click trades. With the book hidden the reserved right strip still counts — that strip
-    // is the order surface either way.
-    let in_book = this.window_pos_in_glass_zone(position);
-    let (count, pair_in_book) = this.click_series.observe(button, native, now, pos, in_book);
+    let count = this.click_series.observe(button, native, now, pos);
     // A press still parked where a × was clicked belongs to that closing, however many charts the
     // reflow has walked under it since, so no gesture may trade on it — not only the double ones,
     // since a single-press binding placed on the middle button or a modifier would sail past a
@@ -73,7 +67,7 @@ fn press_count(
         this.mark_close_residue(pos, cx);
         return None;
     }
-    Some((count, pair_in_book))
+    Some(count)
 }
 
 /// Offers a press to the order-line grab, one call per button.
@@ -85,13 +79,12 @@ fn grab_order_line(
     this: &mut ChartPanel,
     button: TradeMouseButton,
     e: &MouseDownEvent,
-    clicks: Option<(usize, bool)>,
+    clicks: Option<usize>,
     pos: (f32, f32),
     cx: &mut Context<ChartPanel>,
 ) -> bool {
-    let grabbed = clicks.is_some_and(|(count, _)| {
-        this.try_start_order_drag(button, count, e.click_count <= 1, pos, cx)
-    });
+    let grabbed = clicks
+        .is_some_and(|count| this.try_start_order_drag(button, count, e.click_count <= 1, pos, cx));
     if grabbed {
         this.sync_native_cursor();
         cx.notify();
@@ -320,18 +313,10 @@ pub(super) fn mouse_down_left(
     // next band belongs on does not need leaving the mode.
     if within
         && !sells_zone_mode
-        && clicks.is_some_and(|(count, pair_in_book)| {
-            this.try_place_order_click(
-                TradeMouseButton::Left,
-                e.modifiers,
-                count,
-                pair_in_book,
-                pos,
-                cx,
-            )
+        && clicks.is_some_and(|count| {
+            this.try_place_order_click(TradeMouseButton::Left, e.modifiers, count, pos, cx)
         })
     {
-        this.click_series.mark_fired(moon_chart::paint::now_unix_ms());
         cx.stop_propagation();
         return;
     }
@@ -340,7 +325,7 @@ pub(super) fn mouse_down_left(
     // a line — and before the cancel and drag paths, which are about the line under the pointer.
     if within
         && !sells_zone_mode
-        && clicks.is_some_and(|(count, _)| {
+        && clicks.is_some_and(|count| {
             this.try_move_orders_click(TradeMouseButton::Left, e.modifiers, count, pos, cx)
         })
     {
@@ -536,7 +521,7 @@ pub(super) fn mouse_down_right(
     // line: press one opens the menu, whose overlay consumes press two — the menu is the older
     // contract and a gesture nobody has bound is not worth deferring it for.
     if within
-        && clicks.is_some_and(|(count, _)| {
+        && clicks.is_some_and(|count| {
             this.try_move_orders_click(TradeMouseButton::Right, e.modifiers, count, pos, cx)
         })
     {
@@ -553,18 +538,10 @@ pub(super) fn mouse_down_right(
         return;
     }
     if within
-        && clicks.is_some_and(|(count, pair_in_book)| {
-            this.try_place_order_click(
-                TradeMouseButton::Right,
-                e.modifiers,
-                count,
-                pair_in_book,
-                pos,
-                cx,
-            )
+        && clicks.is_some_and(|count| {
+            this.try_place_order_click(TradeMouseButton::Right, e.modifiers, count, pos, cx)
         })
     {
-        this.click_series.mark_fired(moon_chart::paint::now_unix_ms());
         this.suppress_rmb_up = true;
         cx.stop_propagation();
         return;
@@ -650,25 +627,17 @@ pub(super) fn mouse_down_middle(
     };
     this.sync_native_cursor();
     if within
-        && clicks.is_some_and(|(count, pair_in_book)| {
-            this.try_place_order_click(
-                TradeMouseButton::Middle,
-                e.modifiers,
-                count,
-                pair_in_book,
-                pos,
-                cx,
-            )
+        && clicks.is_some_and(|count| {
+            this.try_place_order_click(TradeMouseButton::Middle, e.modifiers, count, pos, cx)
         })
     {
-        this.click_series.mark_fired(moon_chart::paint::now_unix_ms());
         cx.stop_propagation();
         return;
     }
     // A move gesture bound to the middle button, before the X-scale synchronization below claims
     // Shift+middle for itself.
     if within
-        && clicks.is_some_and(|(count, _)| {
+        && clicks.is_some_and(|count| {
             this.try_move_orders_click(TradeMouseButton::Middle, e.modifiers, count, pos, cx)
         })
     {

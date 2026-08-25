@@ -12,16 +12,16 @@ const LATER_MS: f64 = 60_000.0;
 #[test]
 fn a_first_press_is_a_single_click() {
     let mut series = ClickSeries::default();
-    assert_eq!(series.observe(MouseButton::Left, 1, 0.0, SPOT, true), (1, false));
+    assert_eq!(series.observe(MouseButton::Left, 1, 0.0, SPOT), 1);
 }
 
 #[test]
 fn a_double_click_this_panel_saw_whole_counts_as_two() {
     let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
     assert_eq!(
-        series.observe(MouseButton::Left, 2, SOON_MS, SPOT, true),
-        (2, true),
+        series.observe(MouseButton::Left, 2, SOON_MS, SPOT),
+        2,
         "an honest double click on this chart must still trade"
     );
 }
@@ -32,8 +32,8 @@ fn a_double_click_this_panel_saw_whole_counts_as_two() {
 fn a_double_click_whose_first_press_went_elsewhere_counts_as_one() {
     let mut series = ClickSeries::default();
     assert_eq!(
-        series.observe(MouseButton::Left, 2, 0.0, SPOT, true),
-        (1, false),
+        series.observe(MouseButton::Left, 2, 0.0, SPOT),
+        1,
         "a panel that never saw press one must not treat press two as a double click"
     );
 }
@@ -44,10 +44,10 @@ fn a_double_click_whose_first_press_went_elsewhere_counts_as_one() {
 #[test]
 fn a_stale_observation_does_not_absorb_a_stranger_press() {
     let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
     assert_eq!(
-        series.observe(MouseButton::Left, 2, LATER_MS, SPOT, true),
-        (1, false),
+        series.observe(MouseButton::Left, 2, LATER_MS, SPOT),
+        1,
         "a press too late to pair with the last one this panel saw starts a new series"
     );
 }
@@ -58,10 +58,10 @@ fn a_stale_observation_does_not_absorb_a_stranger_press() {
 #[test]
 fn a_press_somewhere_else_still_extends_the_series() {
     let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
     assert_eq!(
-        series.observe(MouseButton::Left, 1, SOON_MS, (SPOT.0 + 200.0, SPOT.1), true),
-        (2, true),
+        series.observe(MouseButton::Left, 1, SOON_MS, (SPOT.0 + 200.0, SPOT.1)),
+        2,
         "two quick clicks apart on this chart are the order pair"
     );
 }
@@ -70,18 +70,18 @@ fn a_press_somewhere_else_still_extends_the_series() {
 #[test]
 fn a_drag_between_presses_breaks_the_pair() {
     let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
     series.drag_beyond((SPOT.0 + 40.0, SPOT.1), 6.0);
     assert_eq!(
-        series.observe(MouseButton::Left, 1, SOON_MS, (SPOT.0 + 40.0, SPOT.1), true),
-        (1, false),
+        series.observe(MouseButton::Left, 1, SOON_MS, (SPOT.0 + 40.0, SPOT.1)),
+        1,
         "a pan's travel must reset the series before its release can pair"
     );
     // Motion inside the threshold is a hand tremor, not a drag.
     series.drag_beyond((SPOT.0 + 42.0, SPOT.1), 6.0);
     assert_eq!(
-        series.observe(MouseButton::Left, 1, SOON_MS + SOON_MS, (SPOT.0 + 44.0, SPOT.1), true),
-        (2, true)
+        series.observe(MouseButton::Left, 1, SOON_MS + SOON_MS, (SPOT.0 + 44.0, SPOT.1)),
+        2
     );
 }
 
@@ -89,10 +89,10 @@ fn a_drag_between_presses_breaks_the_pair() {
 fn the_series_resumes_from_the_presses_this_panel_saw() {
     let mut series = ClickSeries::default();
     // Press one went to the close button of the chart that was here before.
-    series.observe(MouseButton::Left, 2, 0.0, SPOT, true);
+    series.observe(MouseButton::Left, 2, 0.0, SPOT);
     assert_eq!(
-        series.observe(MouseButton::Left, 3, SOON_MS, SPOT, true),
-        (2, true),
+        series.observe(MouseButton::Left, 3, SOON_MS, SPOT),
+        2,
         "two presses in a row on this chart are its own double click, whatever preceded them"
     );
 }
@@ -100,11 +100,8 @@ fn the_series_resumes_from_the_presses_this_panel_saw() {
 #[test]
 fn another_button_starts_its_own_series() {
     let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
-    assert_eq!(
-        series.observe(MouseButton::Right, 2, SOON_MS, SPOT, true),
-        (1, false)
-    );
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
+    assert_eq!(series.observe(MouseButton::Right, 2, SOON_MS, SPOT), 1);
 }
 
 #[test]
@@ -188,7 +185,7 @@ fn a_clock_step_backwards_does_not_latch_the_mark() {
 #[test]
 fn a_close_no_press_explains_leaves_no_mark() {
     let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
     assert_eq!(
         series.fresh_press_pos(LATER_MS),
         None,
@@ -201,97 +198,18 @@ fn a_close_no_press_explains_leaves_no_mark() {
 #[test]
 fn a_slowly_held_close_still_marks_its_pixel() {
     let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
     assert_eq!(series.fresh_press_pos(CLOSE_RESIDUE_MS - 1.0), Some(SPOT));
-}
-
-/// FORK: the order gate. A pair only reports `in_book` when BOTH presses landed in the book
-/// strip — one press on the plot poisons the pair, whichever side it was.
-#[test]
-fn the_pair_reports_book_membership_of_both_presses() {
-    for (first, second, pair) in [
-        (true, true, true),
-        (true, false, false),
-        (false, true, false),
-        (false, false, false),
-    ] {
-        let mut series = ClickSeries::default();
-        series.observe(MouseButton::Left, 1, 0.0, SPOT, first);
-        assert_eq!(
-            series.observe(MouseButton::Left, 2, SOON_MS, SPOT, second),
-            (2, pair),
-            "presses in_book=({first},{second}) must report a pair flag of {pair}"
-        );
-    }
-}
-
-/// FORK: a mouse switch echoing one physical click, faster than the 20 ms recognition delay,
-/// must not complete a pair — it starts a new series on the same spot, so a real second click
-/// still pairs.
-#[test]
-fn a_switch_echo_faster_than_any_hand_starts_a_new_series() {
-    let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
-    assert_eq!(
-        series.observe(MouseButton::Left, 2, PAIR_MIN_GAP_MS - 1.0, SPOT, true),
-        (1, false),
-        "an echo press below the recognition delay must not be the pair's second half"
-    );
-    // The echo re-seeded the series, so the trader's REAL second click still trades.
-    assert_eq!(
-        series.observe(
-            MouseButton::Left,
-            1,
-            PAIR_MIN_GAP_MS - 1.0 + SOON_MS,
-            SPOT,
-            true
-        ),
-        (2, true)
-    );
-    // At exactly the delay the press counts: 20 ms is the gate, not a dead zone past it.
-    let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
-    assert_eq!(
-        series.observe(MouseButton::Left, 2, PAIR_MIN_GAP_MS, SPOT, true),
-        (2, true)
-    );
-}
-
-/// FORK: a fired pair consumes the series — press three starts a FRESH pair instead of chaining
-/// onto press two. A four-click burst is therefore two deliberate orders (presses 1+2 and 3+4),
-/// a three-click burst is one, and the old order-per-extra-press chaining cannot happen.
-#[test]
-fn a_fired_pair_consumes_the_series_so_four_clicks_are_two_orders() {
-    let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
-    assert_eq!(
-        series.observe(MouseButton::Left, 2, SOON_MS, SPOT, true),
-        (2, true),
-        "first pair fires"
-    );
-    series.mark_fired(SOON_MS);
-    // Press three right after: a fresh series, NOT a pair with press two.
-    assert_eq!(
-        series.observe(MouseButton::Left, 3, 2.0 * SOON_MS, SPOT, true),
-        (1, false),
-        "press three must not chain onto the fired pair"
-    );
-    // Press four pairs with press three: the trader's second deliberate double click.
-    assert_eq!(
-        series.observe(MouseButton::Left, 4, 3.0 * SOON_MS, SPOT, true),
-        (2, true),
-        "two quick double clicks must place exactly two orders"
-    );
 }
 
 #[test]
 fn a_reset_slot_starts_counting_again() {
     let mut series = ClickSeries::default();
-    series.observe(MouseButton::Left, 1, 0.0, SPOT, true);
+    series.observe(MouseButton::Left, 1, 0.0, SPOT);
     series.reset();
     assert_eq!(
-        series.observe(MouseButton::Left, 2, SOON_MS, SPOT, true),
-        (1, false),
+        series.observe(MouseButton::Left, 2, SOON_MS, SPOT),
+        1,
         "a slot that took a new coin must not trade it on the previous coin's press"
     );
 }
