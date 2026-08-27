@@ -362,6 +362,10 @@ impl RenderState {
         bars: &mut Vec<CaptionBar>,
         vol_hits: &mut Vec<(usize, CaptionBox)>,
     ) -> anyhow::Result<()> {
+        // FORK (#62): rebuilt from what THIS pass draws, exactly like the plates and `arb_hits`.
+        // Cleared first so a pane whose captions vanish — config change, pane too small — stops
+        // reserving a dead band over the book on the very next frame.
+        self.panes[idx].zone_top_caption_bottom = None;
         let Some(corner) = corner else {
             return Ok(());
         };
@@ -417,7 +421,7 @@ impl RenderState {
                 if elastic {
                     self.plan_wraps(ctx, texts, &mut bands[n].rows, column);
                 }
-                let (module_plates, used_w) = self.draw_stack(
+                let (module_plates, used_w, end_y) = self.draw_stack(
                     ctx,
                     idx,
                     texts,
@@ -431,6 +435,18 @@ impl RenderState {
                     bars,
                     vol_hits,
                 )?;
+                // FORK (#62): the deepest bottom any ZONE-TOP band reached is where the coin-name
+                // block over the order book ENDS — and where a trading click starts being one.
+                // Recorded from the drawn stack itself so the gate cannot disagree with the pixels:
+                // a wrapped detect line, a second module, a bigger font all move this exactly as
+                // far as they move the text.
+                if zone == LabelZone::ZoneTop && downward {
+                    if let Some(end_y) = end_y {
+                        let held = self.panes[idx].zone_top_caption_bottom;
+                        self.panes[idx].zone_top_caption_bottom =
+                            Some(held.map_or(end_y, |h| h.max(end_y)));
+                    }
+                }
                 taken.set(align, used_w);
                 // A module lives in exactly one band, so a band writes only its own slots and
                 // cannot overwrite another's.
@@ -607,7 +623,7 @@ impl RenderState {
         hits: &mut Vec<ArbHit>,
         bars: &mut Vec<CaptionBar>,
         vol_hits: &mut Vec<(usize, CaptionBox)>,
-    ) -> anyhow::Result<(Vec<(usize, CaptionBox)>, f32)> {
+    ) -> anyhow::Result<(Vec<(usize, CaptionBox)>, f32, Option<f32>)> {
         let mut plates: Vec<(usize, CaptionBox)> = Vec::new();
         // The band is as wide as its widest LINE — what the bands drawn after it have to clear.
         let mut used_w = 0.0_f32;
@@ -665,7 +681,11 @@ impl RenderState {
             any_drawn = true;
             y += if downward { row_h } else { -row_h };
         }
-        Ok((plates, used_w))
+        // FORK (#62): where the band ENDED — past the last drawn row, in the direction the band
+        // runs. The zone-top reading of it is the bottom edge of the caption block over the order
+        // book, which is the band a trading click must not fire in.
+        let end_y = any_drawn.then_some(y);
+        Ok((plates, used_w, end_y))
     }
 
     /// Draw one row of captions, returning the width it actually took.

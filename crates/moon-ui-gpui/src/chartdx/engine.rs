@@ -906,6 +906,35 @@ impl ChartEngine {
             .collect()
     }
 
+    /// FORK (#62): where a trading click may fire on this pane, in the chart's own device pixels:
+    /// the order book AS THE PAINTER DREW IT this frame, minus the zone-top caption band — the
+    /// coin-name block — drawn over its top.
+    ///
+    /// Geometry from the paint pass, never a re-derivation: the strip is the exact rect the book
+    /// view was prepared with (full width in book-only mode, shrunk on a narrow pane, gone when
+    /// the book is off), and the caption bottom is where the drawn stack actually ended. The
+    /// move.33 gate re-derived this from the pane's width, disagreed with the pixels by a few
+    /// points, and made orders fire "через раз" — which is why every input here is recorded by
+    /// the pass that painted it.
+    ///
+    /// Returns:
+    ///     The clickable strip, or `None` when this pane painted no book this frame — the caller
+    ///     decides what a hidden book means for its gesture.
+    pub fn painted_book_zone(&self, pane: usize) -> Option<moon_chart::view::Rect> {
+        let data = self.data.borrow();
+        let render = data.render.borrow();
+        let pr = render.panes.get(pane)?;
+        if !pr.active {
+            return None;
+        }
+        crate::chartdx::book_zone_below_captions(
+            pr.orderbook_view.bounds,
+            render.slot_origin,
+            pr.zone_top_caption_bottom,
+            render.pixel_scale.max(0.1),
+        )
+    }
+
     /// Applies the GLOBAL arbitrage roster — which venues the column lists, in what order, under
     /// what name and colour. Returns true on change.
     ///
