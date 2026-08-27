@@ -310,6 +310,7 @@ pub(super) fn boot(cfg: AppConfig, input: BootInput, cx: &mut App) {
         last_detect_seq: std::collections::HashMap::new(),
         last_detect_rev: std::collections::HashMap::new(),
         default_alert_sound: "ding1".to_string(),
+        fill_watch: std::collections::HashMap::new(),
         // Seeded right after construction from the persisted schedule, once the clock zone is
         // settled; see `refresh_quiet_state` below.
         quiet_sleeping: false,
@@ -556,6 +557,8 @@ pub(super) fn boot(cfg: AppConfig, input: BootInput, cx: &mut App) {
                     }
                     // Play core detect/alert sounds for new detects that specify a sound.
                     b.play_detect_sounds();
+                    // FORK (#64): and the fill sound for manual orders that just executed.
+                    b.play_fill_sounds();
                     if drain.order_lines_data {
                         let chart_consumers = b.live_chart_consumers();
                         for chart in chart_consumers {

@@ -353,6 +353,8 @@ fn a_clean_core_group_list_round_trips_through_merge_and_split() {
         merged.chart_memory_percent,
         merged.core_sort,
         merged.report_valuation_mode,
+        merged.fill_sound_on,
+        merged.fill_sound.clone(),
         merged.next_uid.get(),
     );
 

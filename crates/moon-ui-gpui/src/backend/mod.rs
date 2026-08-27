@@ -4,6 +4,7 @@
 
 pub(crate) mod core_warn;
 mod detect_sound;
+mod fill_sound;
 mod figures;
 mod manual_trading;
 mod open_request;
@@ -12,6 +13,7 @@ pub(crate) mod server_chart;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use fill_sound::FillWatch;
 pub(crate) use manual_trading::{
     IgnoreSellLocal, MANUAL_STRATEGY_KIND, ManualOrderTerms, ManualSource, MsExitOverlay,
     PanicLocal, PendingStop,
