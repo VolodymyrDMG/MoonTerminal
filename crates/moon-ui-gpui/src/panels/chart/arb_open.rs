@@ -14,6 +14,7 @@
 use gpui::*;
 use moon_core::session::CoreId;
 use moon_ui::{MoonContextMenuWindowExt as _, MoonMenuItem, MoonWindowExt as _};
+use rust_i18n::t;
 
 use super::ChartPanel;
 use crate::controls::coin_search;
@@ -132,7 +133,14 @@ impl ChartPanel {
         // The chart the click came FROM, so a comparison can hold both sides of it.
         let anchor = (core, market);
         match rows.len() {
-            0 => {}
+            // FORK: a dead click must SAY why — the silent arm here is how the group-filter bug
+            // hid for a whole release. No connected core on that venue trades this coin.
+            0 => {
+                window.push_notification(
+                    moon_ui::MoonNotification::warning(t!("chart.arb.no_core").to_string()),
+                    cx,
+                );
+            }
             1 => {
                 let (target_core, target_market) = rows.into_iter().next().expect("one row");
                 self.open_arb_target(anchor, target_core, target_market, mode, cx);
@@ -173,22 +181,37 @@ impl ChartPanel {
         }
         // Every hit this core offers for the coin, so the identity rule picks among them rather
         // than taking whichever the search ranked first.
+        //
+        // FORK: enumerate EVERY connected core directly instead of `coin_search::search_limited`
+        // with an empty group name. That call was the whole feature's grave: the empty string is
+        // not "no group filter" — it is "the group NAMED empty", which no core belongs to
+        // (default_group() is "default"), so the candidate list was always empty and every venue
+        // click died in the silent zero-rows arm below. The venue itself is by definition on
+        // ANOTHER exchange — usually another group — so no group filter belongs here at all.
+        let ms = b.session.market_source();
         let mut per_core: Vec<(CoreId, Vec<(String, moon_core::market::MarketLabel)>)> = Vec::new();
-        for hit in coin_search::search_limited(b, "", None, &wanted, coin_search::COIN_MATCH_LIMIT)
-        {
-            if hit.core == current {
+        for sess in b.session.sessions() {
+            if sess.id == current {
                 continue;
             }
-            let Some(venue) = venues.get(&hit.core) else {
+            let Some(venue) = venues.get(&sess.id) else {
                 continue;
             };
             if !venue.matches_arb(code, dex) {
                 continue;
             }
-            match per_core.iter_mut().find(|(core, _)| *core == hit.core) {
-                Some((_, hits)) => hits.push((hit.market, hit.label)),
-                None => per_core.push((hit.core, vec![(hit.market, hit.label)])),
+            let markets = ms.search_markets(sess.id, &wanted, coin_search::COIN_MATCH_LIMIT);
+            if markets.is_empty() {
+                continue;
             }
+            let hits: Vec<(String, moon_core::market::MarketLabel)> = markets
+                .into_iter()
+                .map(|market| {
+                    let label = ms.market_label(sess.id, &market);
+                    (market, label)
+                })
+                .collect();
+            per_core.push((sess.id, hits));
         }
         per_core
             .into_iter()
