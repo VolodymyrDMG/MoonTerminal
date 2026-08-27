@@ -1168,6 +1168,10 @@ chart.arb.empty_hint:
   ru: "Пока пусто: ядро ещё не прислало арбитражные цены. Проверь, что в мунботе включён арбитраж и отмечены площадки."
   en: "Empty so far: the core has not relayed arbitrage prices yet. Check that arbitrage is enabled in Moonbot with platforms ticked."
   es: "Vacío por ahora: el núcleo aún no ha enviado precios de arbitraje. Comprueba que el arbitraje esté activado en Moonbot con plataformas marcadas."
+chart.arb.no_core:
+  ru: "Нет подключённого ядра этой биржи с этой монетой"
+  en: "No connected core on that exchange trades this coin"
+  es: "Ningún núcleo conectado de ese exchange opera esta moneda"
 chart.candles.frame_candles:
   ru: "Свечи"
   en: "Candles"
