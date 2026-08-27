@@ -274,7 +274,7 @@ fn comment_chunks_harvest_deals_and_advance_the_mark() {
     let now = crate::util::now_unix_ms_i64();
     // Report dates are UNIX SECONDS, the way the replica actually stores them.
     let now_secs = now / 1_000;
-    let mut ins = |uid: i64, task: i64, comment: &str, buy_secs: i64| {
+    let ins = |uid: i64, task: i64, comment: &str, buy_secs: i64| {
         conn.execute(
             "INSERT INTO orders_rep(core_uid, newrecid, taskid, comment, buydate, closedate)
              VALUES (?1, ?2, ?3, ?4, ?5, 0)",
