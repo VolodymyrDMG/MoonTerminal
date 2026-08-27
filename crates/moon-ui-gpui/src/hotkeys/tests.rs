@@ -131,6 +131,8 @@ fn the_hotkey_channel_prefix_still_matches_this_module() {
         "log.hotkeys matches {prefix:?}, but this module logs as {:?}",
         module_path!()
     );
+}
+
 /// The shift-hotkey pre-check must accept every phase the trader's press can legitimately move.
 ///
 /// Named regression: shipping this guard as `status == "BuySet"` alone made the shift keys read
