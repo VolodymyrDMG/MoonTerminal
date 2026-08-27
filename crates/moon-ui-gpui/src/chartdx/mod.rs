@@ -53,7 +53,7 @@ pub(super) use hits::{
     PRIO_SELL_PCT, PRIO_SELL_SIZE, PRIO_STOP_PCT, PlacedLabel, VolumeHit,
 };
 pub use hits::{ChartActionButton, MarketActionState, WantedActions};
-pub(crate) use pane_layout::{BookLayout, PaneAreas, pane_layout};
+pub(crate) use pane_layout::{BookLayout, PaneAreas, book_zone_below_captions, pane_layout};
 use pane_render::PaneRender;
 use render_state::{RenderState, UdScratch};
 #[cfg(windows)]

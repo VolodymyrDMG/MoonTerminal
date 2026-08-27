@@ -167,6 +167,13 @@ pub(in crate::chartdx) struct PaneRender {
     /// has to hit what the LAST frame actually drew: the column moves with the pane, and a stale
     /// rectangle would open the wrong exchange.
     pub(crate) arb_hits: Vec<ArbHit>,
+    /// FORK (#62): bottom edge of the ZONE-TOP caption stack — the coin-name block drawn over the
+    /// order book — in WINDOW LOGICAL pixels, or `None` when that zone drew nothing this frame.
+    ///
+    /// Recorded by the caption pass the way `arb_hits` above is, and for the same reason: the
+    /// trading-click gate must refuse clicks where the LAST frame actually drew the caption, not
+    /// where a re-derivation guesses it sits. Read through `ChartEngine::painted_book_zone`.
+    pub(in crate::chartdx) zone_top_caption_bottom: Option<f32>,
     /// Arbitrage quotes for this pane's market, refreshed on a throttle rather than per revision:
     /// the protocol only hands them over one venue at a time, each behind the market lock.
     pub(in crate::chartdx) label_arb: Vec<moon_core::market::ArbQuote>,
@@ -565,6 +572,7 @@ impl PaneRender {
             label_volume_market: String::new(),
             label_volume_spans: Vec::new(),
             arb_hits: Vec::new(),
+            zone_top_caption_bottom: None,
             label_arb_reachable: Vec::new(),
             label_arb: Vec::new(),
             label_arb_read_ms: 0,

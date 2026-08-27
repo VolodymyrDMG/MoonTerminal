@@ -216,6 +216,23 @@ impl ChartPanel {
         }) else {
             return false;
         };
+        // FORK (#62): «клики оставить как есть, но чтобы срабатывали только в зоне стакана, и
+        // чтобы не срабатывали в верхней зоне стакана, где есть надпись с названием монеты». The
+        // click MECHANICS above stay permissive — two presses anywhere on this panel inside the
+        // double-click interval pair up — but the DECIDING press fires only inside the painted
+        // book, below the coin-name caption block. Outside it the press is NOT consumed: on the
+        // chart body it stays a pan, a crosshair move, or the first half of the next pair, which
+        // is what a press there always was. Upstream's `place_order_at_pos` already confines the
+        // order to the book's own area (`glass_pane_at`); this gate adds the caption band on top.
+        if self.book_click_pane_at(pos).is_none() {
+            log::debug!(
+                "place order click at ({:.1}, {:.1}) is outside the painted book zone, press \
+                 falls through",
+                pos.0,
+                pos.1,
+            );
+            return false;
+        }
         self.place_order_at_pos(pos, intent, cx)
     }
 
