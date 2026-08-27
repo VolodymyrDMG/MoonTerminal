@@ -269,6 +269,19 @@ fn key_for(func: &str, window: &str) -> Option<&'static str> {
         }
     } else if func.eq_ignore_ascii_case("BTC") && window.eq_ignore_ascii_case("30sec") {
         "btc30s"
+    } else if func.eq_ignore_ascii_case("Avg") {
+        // The EMADetection echo of the Mast/hook strategies: short averaging windows.
+        if window.eq_ignore_ascii_case("2sec") {
+            "avg2s"
+        } else if window.eq_ignore_ascii_case("5sec") {
+            "avg5s"
+        } else if window.eq_ignore_ascii_case("20sec") {
+            "avg20s"
+        } else if window.eq_ignore_ascii_case("40sec") {
+            "avg40s"
+        } else {
+            return None;
+        }
     } else {
         return None;
     };
@@ -285,12 +298,17 @@ fn key_for(func: &str, window: &str) -> Option<&'static str> {
 /// `Func(window, granularity) = value%`. Unknown functions or windows are skipped, a line with no
 /// recognized expression answers `None`, and the granularity argument is deliberately ignored.
 pub fn parse_emafilter(msg: &str) -> Option<(i64, Vec<(&'static str, f64)>)> {
-    let marker = msg.find("EMAFilter:")?;
+    // Two spellings of the same echo: strike-family strategies print `EMAFilter:`, the
+    // Mast/hook family prints `EMADetection:` — the tail format is identical.
+    let (marker, len) = match msg.find("EMAFilter:") {
+        Some(at) => (at, "EMAFilter:".len()),
+        None => (msg.find("EMADetection:")?, "EMADetection:".len()),
+    };
     let head = &msg[..marker];
     let close = head.rfind(')')?;
     let open = head[..close].rfind('(')?;
     let taskid: i64 = head[open + 1..close].trim().parse().ok()?;
-    let vals = parse_values(&msg[marker + "EMAFilter:".len()..]);
+    let vals = parse_values(&msg[marker + len..]);
     (!vals.is_empty()).then_some((taskid, vals))
 }
 

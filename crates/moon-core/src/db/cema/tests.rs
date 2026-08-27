@@ -315,3 +315,25 @@ fn comment_chunks_harvest_deals_and_advance_the_mark() {
     assert_eq!((rows[0].taskid, rows[0].key, rows[0].v), (14, "min5h", -1.25));
     assert_eq!(mark, 5);
 }
+
+/// The Mast/hook family's echo: an `EMADetection:` marker and Avg windows, in the exact shape
+/// the user's report comment carries.
+#[test]
+fn emadetection_avg_windows_parse_from_both_sources() {
+    let comment = "x EMADetection: Avg(20sec, 1sec) = 0.00%  Avg(40sec, 1sec) = -21.48%  Avg(5sec, 1sec) = -1.37%  Avg(2sec, 1sec) = 0.87%  y";
+    assert_eq!(
+        parse_values(comment),
+        vec![
+            ("avg20s", 0.0),
+            ("avg40s", -21.48),
+            ("avg5s", -1.37),
+            ("avg2s", 0.87),
+        ]
+    );
+    // The LOG spelling of the same echo, with the task id in front.
+    let line = "04:00:20.822  VANRY<Short> : [4] (3538) EMADetection: Avg(40sec, 1sec) = -1.25%  BTC(40sec, 1sec) = 0.01%";
+    let (task, vals) = parse_emafilter(line).expect("EMADetection marker parses");
+    assert_eq!(task, 3538);
+    // BTC(40sec) is not a carried window; only the Avg lands.
+    assert_eq!(vals, vec![("avg40s", -1.25)]);
+}
