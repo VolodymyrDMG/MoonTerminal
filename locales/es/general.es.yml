@@ -23,3 +23,5 @@ general.log_retention_hint: "Los archivos más antiguos se eliminan al iniciar y
 general.days: "días"
 general.charts_auto_activate: "Cambiar al gráfico al detectar"
 general.charts_auto_activate_hint: "Como en Moonbot: estrategia con SilentNoCharts=NO — la moneda detectada se abre en Main (una por pasada); con AddToChart — el panel cambia solo a la pestaña Add que recibió la moneda. La ventana de la aplicación no se trae al frente. Des — las detecciones no tocan los gráficos, como antes."
+general.fill_sound: "Sonido cuando se ejecuta mi orden"
+general.fill_sound_hint: "Solo órdenes manuales (no de estrategias). Elegir un sonido lo reproduce al instante."

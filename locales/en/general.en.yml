@@ -23,3 +23,5 @@ general.log_retention_hint: "Files older than this are deleted on startup and on
 general.days: "days"
 general.charts_auto_activate: "Switch to chart on detect"
 general.charts_auto_activate_hint: "As in Moonbot: strategy SilentNoCharts=NO — the detect's coin opens on Main (one per pass); AddToChart set — the panel switches itself to the Add tab that received the new coin. The application window is never raised. Off — detects leave the charts alone, as before."
+general.fill_sound: "Sound when my order executes"
+general.fill_sound_hint: "Manual orders only (not strategy ones). Picking a sound plays it right away."

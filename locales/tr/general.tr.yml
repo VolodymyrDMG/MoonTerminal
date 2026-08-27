@@ -23,3 +23,5 @@ general.log_retention_hint: "Bu süreden eski dosyalar açılışta ve günde bi
 general.days: "gün"
 general.charts_auto_activate: "Tespitte grafiğe geç"
 general.charts_auto_activate_hint: "Moonbot'taki gibi: strateji SilentNoCharts=NO — tespit edilen coin Main'de açılır (geçiş başına bir tane); AddToChart ayarlıysa — panel yeni coini alan Add sekmesine kendisi geçer. Uygulama penceresi öne getirilmez. Kapalı — tespitler grafiklere dokunmaz, eskisi gibi."
+general.fill_sound: "Emrim gerçekleşince ses"
+general.fill_sound_hint: "Yalnızca elle verilen emirler (strateji emirleri değil). Bir ses seçmek onu hemen çalar."

@@ -23,3 +23,5 @@ general.log_retention_hint: "File cũ hơn mức này bị xóa lúc khởi đ�
 general.days: "ngày"
 general.charts_auto_activate: "Chuyển sang biểu đồ khi phát hiện"
 general.charts_auto_activate_hint: "Như trong Moonbot: chiến lược có SilentNoCharts=NO — coin được phát hiện mở trên Main (mỗi lượt một coin); có AddToChart — bảng tự chuyển sang tab Add vừa nhận coin mới. Cửa sổ ứng dụng không được đưa lên trước. Tắt — phát hiện không động vào biểu đồ, như trước."
+general.fill_sound: "Âm thanh khi lệnh của tôi khớp"
+general.fill_sound_hint: "Chỉ lệnh thủ công (không phải lệnh của chiến lược). Chọn âm thanh sẽ phát ngay."
