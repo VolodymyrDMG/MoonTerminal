@@ -1,5 +1,7 @@
 use super::*;
 
+use moonproto::{StrategyFields, StrategyKind, StrategySnapshot};
+
 /// `0` in KeepInChart/AddToChart is a MEANING, so garbage has to yield `None` — and with it the
 /// caller's default — rather than quietly folding to zero and reading as one of those meanings.
 #[test]

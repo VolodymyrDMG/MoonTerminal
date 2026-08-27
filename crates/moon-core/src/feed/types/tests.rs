@@ -320,6 +320,7 @@ fn detect_row(keep_in_chart_secs: u32) -> DetectRow {
         sound_alert: false,
         keep_alert_secs: 60,
         add_to_chart: 1,
+        open_chart: false,
         keep_in_chart_secs,
         sound_name: None,
         is_alert: false,
