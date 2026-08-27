@@ -298,6 +298,38 @@ pub const FIELDS: &[FieldSpec] = &[
         None,
         None,
     ),
+    field(
+        "cema_avg2s",
+        "Avg2s",
+        FieldClass::CustomEma,
+        None,
+        None,
+        None,
+    ),
+    field(
+        "cema_avg5s",
+        "Avg5s",
+        FieldClass::CustomEma,
+        None,
+        None,
+        None,
+    ),
+    field(
+        "cema_avg20s",
+        "Avg20s",
+        FieldClass::CustomEma,
+        None,
+        None,
+        None,
+    ),
+    field(
+        "cema_avg40s",
+        "Avg40s",
+        FieldClass::CustomEma,
+        None,
+        None,
+        None,
+    ),
 ];
 
 /// FORK: CustomEMA fields as `(report column, cema_vals key)` — the single mapping the join in
@@ -307,6 +339,10 @@ pub const CEMA_FIELDS: &[(&str, &str)] = &[
     ("cema_min5h", "min5h"),
     ("cema_min45m", "min45m"),
     ("cema_btc30s", "btc30s"),
+    ("cema_avg2s", "avg2s"),
+    ("cema_avg5s", "avg5s"),
+    ("cema_avg20s", "avg20s"),
+    ("cema_avg40s", "avg40s"),
 ];
 
 /// `DeltaN_Type` value for a slot field (`None` means the field is not a slot).
