@@ -43,6 +43,8 @@ pub mod pane;
 #[cfg(windows)]
 pub mod readout;
 mod render_state;
+#[cfg(test)]
+mod tests;
 pub(crate) mod volume_graph;
 pub(crate) use render_state::arrival_flash_enabled;
 mod text;
@@ -426,6 +428,13 @@ struct PaneRender {
     /// has to hit what the LAST frame actually drew: the column moves with the pane, and a stale
     /// rectangle would open the wrong exchange.
     pub(super) arb_hits: Vec<ArbHit>,
+    /// FORK (#62): bottom edge of the ZONE-TOP caption stack — the coin-name block drawn over the
+    /// order book — in WINDOW LOGICAL pixels, or `None` when that zone drew nothing this frame.
+    ///
+    /// Recorded by the caption pass the way `arb_hits` above is, and for the same reason: the
+    /// trading-click gate must refuse clicks where the LAST frame actually drew the caption, not
+    /// where a re-derivation guesses it sits. Read through `ChartEngine::painted_book_zone`.
+    pub(super) zone_top_caption_bottom: Option<f32>,
     /// Arbitrage quotes for this pane's market, refreshed on a throttle rather than per revision:
     /// the protocol only hands them over one venue at a time, each behind the market lock.
     label_arb: Vec<moon_core::market::ArbQuote>,
@@ -682,6 +691,7 @@ impl PaneRender {
             label_volume_market: String::new(),
             label_volume_spans: Vec::new(),
             arb_hits: Vec::new(),
+            zone_top_caption_bottom: None,
             label_arb_reachable: Vec::new(),
             label_arb: Vec::new(),
             label_arb_read_ms: 0,
@@ -1152,6 +1162,51 @@ fn horizontal_chart_layout(
     };
     let chart_w = (rect_w - price_axis_w - glass_w).max(1.0);
     (axis_pos, price_axis_w, glass_w, chart_w)
+}
+
+/// FORK (#62): the painted order book minus the caption band over its top, in the chart's own
+/// SLOT-LOCAL DEVICE pixels — the area a trading click may fire in.
+///
+/// Every input is something the paint pass itself produced, never a re-derivation: `book` is the
+/// exact `glass_win` the book view was prepared with (window device pixels), and
+/// `caption_bottom_logical` is where the zone-top caption stack — the coin-name block — actually
+/// ended this frame (window logical pixels, the caption pass's own space). Re-deriving either from
+/// the pane's width is what put the move.33 gate a few pixels off the drawn book and made orders
+/// fire "через раз".
+///
+/// Args:
+///     book: The book view's `bounds` `[x, y, w, h]`, window device pixels.
+///     slot_origin: The chart slot's origin, window device pixels.
+///     caption_bottom_logical: Bottom of the zone-top caption stack, window logical pixels.
+///     sf: Device pixels per logical pixel.
+///
+/// Returns:
+///     The clickable strip, or `None` when no book was painted or captions cover all of it.
+fn book_zone_below_captions(
+    book: [f32; 4],
+    slot_origin: [f32; 2],
+    caption_bottom_logical: Option<f32>,
+    sf: f32,
+) -> Option<moon_chart::view::Rect> {
+    if !(book[2] > 0.0) || !(book[3] > 0.0) {
+        return None;
+    }
+    let x = book[0] - slot_origin[0];
+    let mut y = book[1] - slot_origin[1];
+    let bottom = y + book[3];
+    if let Some(cap_logical) = caption_bottom_logical {
+        // Same conversion the cursor readout uses in the other direction: logical × scale gives
+        // window device, minus the slot's origin gives the chart's own pixels.
+        let cap_y = cap_logical * sf - slot_origin[1];
+        y = y.max(cap_y);
+    }
+    let h = bottom - y;
+    (h > 0.0).then_some(moon_chart::view::Rect {
+        x,
+        y,
+        w: book[2],
+        h,
+    })
 }
 
 struct ChartDataState {
