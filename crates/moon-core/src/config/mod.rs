@@ -299,6 +299,11 @@ pub struct AppConfig {
     /// Which conversion every quote-money surface applies (`settings.toml`). Defaults to
     /// `Historical`, the at-trade-time rate; the current-rate mode is deliberately opt-in.
     pub report_valuation_mode: ValuationMode,
+    /// FORK (#64): play a sound when a MANUAL order fills (settings.toml). Defaults to off.
+    pub fill_sound_on: bool,
+    /// FORK (#64): which embedded sound plays, by the same file stem the alert sounds use
+    /// (settings.toml).
+    pub fill_sound: String,
     /// Next uid candidate after config entries and the supplied durable-store floor are reconciled.
     ///
     /// Private to `config`: a `pub` field could be overwritten with a stale counter from
@@ -359,6 +364,8 @@ impl AppConfig {
             chart_memory_percent: Default::default(),
             core_sort: Default::default(),
             report_valuation_mode: Default::default(),
+            fill_sound_on: Default::default(),
+            fill_sound: schema::default_fill_sound(),
             hotkeys: Default::default(),
             theme: Default::default(),
             orders: Default::default(),
@@ -459,6 +466,8 @@ impl AppConfig {
                 chart_memory_percent: merged.chart_memory_percent,
                 core_sort: merged.core_sort,
                 report_valuation_mode: merged.report_valuation_mode,
+                fill_sound_on: merged.fill_sound_on,
+                fill_sound: merged.fill_sound,
                 next_uid: merged.next_uid,
                 hotkeys,
                 theme,
@@ -776,6 +785,8 @@ impl AppConfig {
             chart_memory_percent: settings.chart_memory_percent,
             core_sort: settings.core_sort,
             report_valuation_mode: settings.report_valuation_mode,
+            fill_sound_on: settings.fill_sound_on,
+            fill_sound: settings.fill_sound,
             // The counter starts above the highest uid issued above, before applying the optional
             // store floor. This mode can share `data/` with encrypted-config runs.
             next_uid: UidCounter::new(next, uid_floor),
@@ -843,6 +854,8 @@ impl AppConfig {
             self.chart_memory_percent,
             self.core_sort,
             self.report_valuation_mode,
+            self.fill_sound_on,
+            self.fill_sound.clone(),
             self.next_uid.get(),
         );
         // Refuse an unwritable servers.enc BEFORE the pair write starts. Failing inside the block
@@ -975,6 +988,8 @@ impl AppConfig {
             // The conversion applied to quote money is a read-side presentation choice: it changes
             // no session, window, or connection.
             ValuationMode::default(),
+            false, // The fill sound is behavioral, not structural.
+            schema::default_fill_sound(),
             // The uid counter advances on save and does not describe structure by itself.
             0,
         );

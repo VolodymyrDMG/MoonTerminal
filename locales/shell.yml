@@ -458,6 +458,14 @@ coin_menu.bl_core:
   ru: "В ЧС ядра «%{core}»"
   en: "Add to core «%{core}» blacklist"
   es: "Añadir a la lista negra del núcleo «%{core}»"
+general.fill_sound:
+  ru: "Звук при сработке моего ордера"
+  en: "Sound when my order executes"
+  es: "Sonido cuando se ejecuta mi orden"
+general.fill_sound_hint:
+  ru: "Только ручные ордера (не стратегийные). Выбор звука сразу проигрывает его."
+  en: "Manual orders only (not strategy ones). Picking a sound plays it right away."
+  es: "Solo órdenes manuales (no de estrategias). Elegir un sonido lo reproduce al instante."
 coin_menu.temp_ban_15m:
   ru: "В ЧС на 15 минут"
   en: "Ban for 15 minutes"
