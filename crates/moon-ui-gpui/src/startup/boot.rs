@@ -345,6 +345,7 @@ pub(super) fn boot(cfg: AppConfig, input: BootInput, cx: &mut App) {
         last_orders_alert_rev: std::collections::HashMap::new(),
         price_alert_near: std::collections::HashMap::new(),
         problem_sound: Default::default(),
+        fill_watch: std::collections::HashMap::new(),
         // Seeded right after construction from the persisted schedule, once the clock zone is
         // settled; see `refresh_quiet_state` below.
         quiet_sleeping: false,
@@ -625,6 +626,10 @@ pub(super) fn boot(cfg: AppConfig, input: BootInput, cx: &mut App) {
                     // Moonbot's network-problem alarm, on the core's own switch, last in the
                     // same admission chain.
                     b.play_problem_sounds(alert_played);
+                    // FORK (#64): the fill sound for MANUAL orders that just executed. Queued on
+                    // the ordinary lane like an alert, so the scheduler below plays it in turn
+                    // rather than cutting a clip already sounding.
+                    b.play_fill_sounds();
                     b.collect_trade_sounds();
                     b.pump_sounds();
                     if drain.order_lines_data {

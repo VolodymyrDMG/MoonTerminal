@@ -174,6 +174,50 @@ impl SettingsView {
         }
     }
 
+    /// FORK (#64): the fill-sound picker — the sound catalog (embedded set plus the user's own
+    /// folder, through the same `SoundChoices` the alert and trade pickers read), current one
+    /// checked, selection written to the DRAFT and played at once as its own preview.
+    fn fill_sound_dropdown(&self, cur: &str, cx: &Context<Self>) -> impl IntoElement + use<> {
+        use crate::panels::common::SoundChoices;
+        use crate::panels::{RadioMark, radio_items};
+        use moon_ui::{MoonButtonVariant, MoonDropdown};
+
+        let backend = self.backend.clone();
+        let view = cx.entity();
+        let choices = SoundChoices::for_current(cur);
+        let label = choices
+            .selected_label()
+            .unwrap_or_else(|| SharedString::from(cur.to_string()));
+        let options = choices.rows("fill-snd");
+        let stems = std::rc::Rc::new(choices.stems);
+        let items = radio_items(
+            options,
+            choices.selected.unwrap_or(usize::MAX),
+            RadioMark::Check,
+            move |app, row: usize| {
+                let Some(name) = stems.get(row).cloned() else {
+                    return;
+                };
+                backend.update(app, |b, bcx| {
+                    if let Some(p) = b.preview.as_mut() {
+                        p.fill_sound = name.clone();
+                    }
+                    bcx.notify();
+                });
+                view.update(app, |_, cx| cx.notify());
+                crate::media::sound::play(&name);
+            },
+        );
+        MoonDropdown::new("fill-sound-pick")
+            .label(label)
+            .trigger_caret(true)
+            .trigger_variant(MoonButtonVariant::Soft)
+            .trigger_size(MoonButtonSize::density(cx))
+            .trigger_width_scaled(120.0)
+            .menu_width_scaled(150.0)
+            .items(items)
+    }
+
     /// Keep equal-width arrows large enough for the body text at any zoom.
     /// Build a `<<  <  value  >  >>` stepper row with small and large adjustments.
     /// Shared by second/day counters and the Storage version limit; `adjust` owns clamping.
@@ -240,7 +284,7 @@ impl SettingsView {
     pub(super) fn general_tab(&self, cx: &Context<Self>) -> impl IntoElement {
         let p = MoonPalette::active(cx);
         let muted = rgba_from(p.text_muted, 1.0);
-        let (split, auto_activate, scz, idle_secs, logf, ret) = {
+        let (split, auto_activate, scz, idle_secs, logf, ret, fill_on, fill_sound) = {
             let b = self.backend.read(cx);
             let d = b.preview.as_ref().unwrap_or(&b.config);
             (
@@ -250,6 +294,8 @@ impl SettingsView {
                 d.main_idle_close_secs,
                 d.log_to_file,
                 d.log_retention_days,
+                d.fill_sound_on,
+                d.fill_sound.clone(),
             )
         };
         // Remember the last valid enabled timeout and restore it when the checkbox is re-enabled.
@@ -410,6 +456,31 @@ impl SettingsView {
                         100,
                         Self::adjust_idle,
                     )),
+            )
+            .child(super::separator(p, cx))
+            // FORK (#64): sound on a MANUAL order's execution, with the sound picker. Selecting a
+            // sound plays it immediately — the same preview contract the Alerts panel's
+            // default-sound dropdown established. Distinct from the per-exchange trade sounds
+            // tab: those fire on every position, this one only on the trader's own hand-placed
+            // orders.
+            .child(
+                h_flex()
+                    .gap(design::ui_px(cx, 10.0))
+                    .items_center()
+                    .child(checkbox_with_hint(
+                        self.draft_checkbox(cx, "fill-sound", fill_on, |p, v| {
+                            if p.fill_sound_on != v {
+                                p.fill_sound_on = v;
+                                true
+                            } else {
+                                false
+                            }
+                        })
+                        .label(t!("general.fill_sound").to_string()),
+                        "general.fill_sound_hint",
+                        &t!("general.fill_sound_hint"),
+                    ))
+                    .child(self.fill_sound_dropdown(&fill_sound, cx)),
             )
             .child(super::separator(p, cx))
             // Stack layout is now configured per tab from the chart-tabs layout popup.

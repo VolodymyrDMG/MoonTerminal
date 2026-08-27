@@ -666,6 +666,10 @@ struct Backend {
     /// Which network findings each core has already alarmed on, and when; see
     /// `backend::problem_sound`.
     problem_sound: crate::backend::ProblemSoundState,
+    /// FORK (#64): per-core fill-sound watch — the last observed orders revision and each MANUAL
+    /// order's last phase class, so a phase TRANSITION (set → executed) is what beeps, never a
+    /// snapshot that merely arrives already executed. See `backend::fill_sound`.
+    fill_watch: std::collections::HashMap<CoreId, backend::FillWatch>,
     /// Cached answer to "is quiet mode silencing sounds right now", recomputed once per
     /// coordination tick and on every user action; see `backend::quiet`. The detect-sound path runs
     /// inside the feed drain, so it must not do a time-zone conversion per wake.
