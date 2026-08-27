@@ -304,6 +304,31 @@ impl ChartPanel {
             .then_some(pane)
     }
 
+    /// FORK (#62): the pane a PLACEMENT CLICK may fire on at this position, or `None` where such a
+    /// click must stay an ordinary chart press.
+    ///
+    /// «чтобы срабатывали только в зоне стакана, и чтобы не срабатывали в верхней зоне стакана,
+    /// где есть надпись с названием монеты» — the zone is the order book as the painter DREW it
+    /// this frame, minus the caption band over its top. That geometry comes from the paint pass
+    /// (`ChartEngine::painted_book_zone`), because the move.33 attempt to re-derive it here from
+    /// the pane's width sat a few pixels off the drawn book and refused real clicks "через раз".
+    ///
+    /// A pane that painted NO book — the book switched off — falls back to the reserved control
+    /// strip, the same zone separate-control-zones mode already trades by: with nothing drawn
+    /// there is nothing to misalign with, and a trader who hides the book keeps click trading in
+    /// the strip that still marks its edge.
+    pub(super) fn book_click_pane_at(&self, pos: (f32, f32)) -> Option<usize> {
+        let pane = self.input.pane_at(pos.0, pos.1)?;
+        if let Some(zone) = self.chart.painted_book_zone(pane) {
+            return (pos.0 >= zone.x
+                && pos.0 <= zone.x + zone.w
+                && pos.1 >= zone.y
+                && pos.1 <= zone.y + zone.h)
+                .then_some(pane);
+        }
+        self.glass_pane_at(pos)
+    }
+
     pub(super) fn price_at_pane_y(&self, pane: usize, y: f32) -> Option<f64> {
         let plot = self.local_plot_rect(pane)?;
         if plot.h <= 1.0 {

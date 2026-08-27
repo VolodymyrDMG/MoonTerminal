@@ -475,6 +475,10 @@ impl RenderState {
         vol_hits: &mut Vec<(usize, CaptionBox)>,
         act_draws: &mut Vec<ActionDraw>,
     ) -> anyhow::Result<()> {
+        // FORK (#62): rebuilt from what THIS pass draws, exactly like the plates and `arb_hits`.
+        // Cleared first so a pane whose captions vanish — config change, pane too small — stops
+        // reserving a dead band over the book on the very next frame.
+        self.panes[idx].zone_top_caption_bottom = None;
         let Some(corner) = corner else {
             return Ok(());
         };
@@ -566,6 +570,17 @@ impl RenderState {
                     hungry_budget,
                 )?;
                 taken.set_extent(align, used_w, used_h);
+                // FORK (#62): the deepest bottom any ZONE-TOP band reached is where the coin-name
+                // block over the order book ENDS — and where a trading click starts being one.
+                // Derived from the stack's own drawn height, so the gate cannot disagree with the
+                // pixels: a wrapped detect line, a second module, a bigger font all move this
+                // exactly as far as they move the text.
+                if zone == LabelZone::ZoneTop && downward && used_h > 0.0 {
+                    let end_y = start_y + used_h;
+                    let held = self.panes[idx].zone_top_caption_bottom;
+                    self.panes[idx].zone_top_caption_bottom =
+                        Some(held.map_or(end_y, |h| h.max(end_y)));
+                }
                 // A module lives in exactly one band, so a band writes only its own slots and
                 // cannot overwrite another's.
                 for (module_ix, box_) in module_plates {
