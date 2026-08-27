@@ -157,6 +157,13 @@ pub struct CoreData {
     /// Core client-settings snapshot, including TP, SL, sell, and iceberg settings, or `None` until
     /// it arrives.
     pub client_settings: Option<ClientSettings>,
+    /// FORK (#63): the core's TEMPORARY coin blacklist as of [`Self::temp_blacklist_at_ms`].
+    ///
+    /// Each row's `remaining_days` counts down ON THE CORE; a reader subtracts the time elapsed
+    /// since the stamp to show what is left now. Empty when nothing is banned.
+    pub temp_blacklist: Vec<crate::feed::TempBanRow>,
+    /// Unix-ms receipt time of [`Self::temp_blacklist`]; 0 until the first snapshot.
+    pub temp_blacklist_at_ms: i64,
     /// Core leverage-management snapshot, or `None` until it arrives.
     pub lev_manage: Option<LevManageState>,
     /// Core runtime and passive-mode state, or `None` until it arrives.
@@ -314,6 +321,8 @@ impl CoreData {
             transfer_assets: TransferAssetsSnapshot::default(),
             license: None,
             client_settings: None,
+            temp_blacklist: Vec::new(),
+            temp_blacklist_at_ms: 0,
             lev_manage: None,
             runtime_state: None,
             hedge_mode: None,
@@ -659,6 +668,22 @@ impl CoreData {
             FeedMsg::ClientSettings(settings) => {
                 if self.client_settings.as_ref() != Some(&settings) {
                     self.client_settings = Some(settings);
+                    self.client_settings_rev = self.client_settings_rev.wrapping_add(1);
+                }
+            }
+            FeedMsg::TempBlacklist(rows) => {
+                // The countdowns shrink between snapshots, so an equality gate would treat nearly
+                // every snapshot as a change; compare the SYMBOL sets for the repaint signal and
+                // always restamp the receipt time the remaining-time display is computed from.
+                let symbols_changed = self.temp_blacklist.len() != rows.len()
+                    || self
+                        .temp_blacklist
+                        .iter()
+                        .zip(rows.iter())
+                        .any(|(a, b)| !a.symbol.eq_ignore_ascii_case(&b.symbol));
+                self.temp_blacklist = rows;
+                self.temp_blacklist_at_ms = crate::util::now_unix_ms_i64();
+                if symbols_changed {
                     self.client_settings_rev = self.client_settings_rev.wrapping_add(1);
                 }
             }

@@ -222,6 +222,62 @@ fn build_items(ctx: CoinMenuCtx, backend: &Entity<Backend>, cx: &App) -> Vec<Moo
             );
         }
 
+        // FORK (#63): MoonBot's «ЧС на время» — the core-wide TEMPORARY blacklist, which every
+        // strategy of the core obeys. The rows live on the CORE and it lifts them itself, so the
+        // menu only writes; the entries are per-market because that is what the temp list matches.
+        if has_market {
+            if let Some(left) = temp_ban_left_secs(b, core, &ctx.market) {
+                let backend_u = backend.clone();
+                let market_u = ctx.market.clone();
+                let workspace_group = ctx.workspace_group.clone();
+                items.push(
+                    MoonMenuItem::with_key(
+                        "coin-tbl-off",
+                        t!("coin_menu.temp_unban", left = fmt_ban_left(left)).to_string(),
+                    )
+                    .checked(true)
+                    .on_click(move |_, window, app| {
+                        window.close_context_menu(app);
+                        backend_u.update(app, |b, _| {
+                            if workspace_action_allows_cores(b, workspace_group.as_deref(), &[core])
+                            {
+                                if let Err(err) =
+                                    b.session.temp_unban_coin(core, market_u.clone())
+                                {
+                                    log::warn!("coin_menu: temp unban {market_u} failed: {err:#}");
+                                }
+                            }
+                        });
+                    }),
+                );
+            }
+            for (key, label, secs) in [
+                ("coin-tbl-15m", t!("coin_menu.temp_ban_15m"), 900.0),
+                ("coin-tbl-1h", t!("coin_menu.temp_ban_1h"), 3_600.0),
+                ("coin-tbl-4h", t!("coin_menu.temp_ban_4h"), 14_400.0),
+                ("coin-tbl-24h", t!("coin_menu.temp_ban_24h"), 86_400.0),
+            ] {
+                let backend_t = backend.clone();
+                let market_t = ctx.market.clone();
+                let workspace_group = ctx.workspace_group.clone();
+                items.push(MoonMenuItem::with_key(key, label.to_string()).on_click(
+                    move |_, window, app| {
+                        window.close_context_menu(app);
+                        backend_t.update(app, |b, _| {
+                            if workspace_action_allows_cores(b, workspace_group.as_deref(), &[core])
+                            {
+                                if let Err(err) =
+                                    b.session.temp_ban_coin(core, market_t.clone(), secs)
+                                {
+                                    log::warn!("coin_menu: temp ban {market_t} failed: {err:#}");
+                                }
+                            }
+                        });
+                    },
+                ));
+            }
+        }
+
         // Add to every core selected in the panel filter, but only when more than one is selected.
         if ctx.selected_cores.len() > 1 {
             let cores = ctx.selected_cores.clone();
@@ -524,6 +580,37 @@ fn add_to_strategy_blacklist(b: &mut Backend, core: CoreId, sid: u64, coin: &str
         Err(err) => {
             log::warn!("coin_menu: add {coin} to strategy {sid}@{core} blacklist failed: {err:#}");
         }
+    }
+}
+
+/// FORK (#63): seconds left on a standing temporary ban for `market`, if one is active NOW.
+///
+/// The store keeps each row's countdown AS RECEIVED plus the receipt time; what is left is that
+/// countdown minus the time since receipt, and a row that ran out between snapshots reads as no
+/// ban at all rather than a stale entry the core has already lifted.
+fn temp_ban_left_secs(b: &Backend, core: CoreId, market: &str) -> Option<f64> {
+    let store = b.session.store();
+    let cd = store.core(core)?;
+    let row = cd
+        .temp_blacklist
+        .iter()
+        .find(|row| row.symbol.eq_ignore_ascii_case(market))?;
+    let elapsed_secs =
+        (moon_core::util::now_unix_ms_i64() - cd.temp_blacklist_at_ms).max(0) as f64 / 1_000.0;
+    let left = row.remaining_days * 86_400.0 - elapsed_secs;
+    (left > 0.0).then_some(left)
+}
+
+/// FORK (#63): a remaining ban time the menu can print — `4ч 59м`, `12м`, `45с`.
+fn fmt_ban_left(secs: f64) -> String {
+    let secs = secs.max(0.0) as i64;
+    let (h, m) = (secs / 3_600, (secs % 3_600) / 60);
+    if h > 0 {
+        format!("{h}{} {m}{}", t!("coin_menu.unit_h"), t!("coin_menu.unit_m"))
+    } else if m > 0 {
+        format!("{m}{}", t!("coin_menu.unit_m"))
+    } else {
+        format!("{secs}{}", t!("coin_menu.unit_s"))
     }
 }
 

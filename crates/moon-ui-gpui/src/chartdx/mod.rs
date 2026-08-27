@@ -1209,6 +1209,32 @@ fn book_zone_below_captions(
     })
 }
 
+/// FORK (#63): the caption band itself — the top strip of the painted book that
+/// [`book_zone_below_captions`] excludes, where the coin-name block is drawn. Same inputs, same
+/// spaces; a right-click here is a click on the coin's NAME, which is what opens its menu.
+fn caption_band_over_book(
+    book: [f32; 4],
+    slot_origin: [f32; 2],
+    caption_bottom_logical: Option<f32>,
+    sf: f32,
+) -> Option<moon_chart::view::Rect> {
+    let cap_logical = caption_bottom_logical?;
+    if !(book[2] > 0.0) || !(book[3] > 0.0) {
+        return None;
+    }
+    let x = book[0] - slot_origin[0];
+    let top = book[1] - slot_origin[1];
+    let cap_y = cap_logical * sf - slot_origin[1];
+    let bottom = cap_y.min(top + book[3]);
+    let h = bottom - top;
+    (h > 0.0).then_some(moon_chart::view::Rect {
+        x,
+        y: top,
+        w: book[2],
+        h,
+    })
+}
+
 struct ChartDataState {
     container: Rc<RefCell<Container>>,
     render: Rc<RefCell<RenderState>>,

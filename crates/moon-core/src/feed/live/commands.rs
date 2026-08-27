@@ -1029,6 +1029,15 @@ pub(super) fn drain_commands(
             Ok(CoreCmd::SetBlacklist { on, text }) => {
                 client_settings_sequence.enqueue_blacklist(on, text);
             }
+            Ok(CoreCmd::TempBan {
+                symbol,
+                remaining_secs,
+            }) => {
+                client_settings_sequence.enqueue_temp_ban(symbol, remaining_secs);
+            }
+            Ok(CoreCmd::TempUnban { symbol }) => {
+                client_settings_sequence.enqueue_temp_unban(symbol);
+            }
             Ok(CoreCmd::SetExcludeBlacklistedDelta(on)) => {
                 if let Err(error) = client
                     .settings()

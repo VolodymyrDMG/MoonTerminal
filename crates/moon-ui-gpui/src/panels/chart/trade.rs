@@ -816,6 +816,80 @@ impl ChartPanel {
         true
     }
 
+    /// FORK (#63): open the coin menu from a right-click on the coin-name caption band over the
+    /// book — the «кнопка ЧС»: the name IS the coin, and its menu carries the blacklist actions,
+    /// including MoonBot's timed «ЧС на время».
+    ///
+    /// The band is the painter's own geometry (`caption_band_over_book`), the same strip the
+    /// placement gate excludes, so the two readings of "the coin name's area" cannot diverge.
+    /// Venue names and volume blocks inside the band are checked BEFORE this in the right-press
+    /// order and keep their own menus.
+    pub(super) fn try_open_caption_coin_menu(
+        &mut self,
+        local_pos: (f32, f32),
+        menu_pos: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        // Historical viewer: its market is not live on any core, and every menu action would
+        // address one. Rationale beside `try_place_order_click`.
+        if self.historical {
+            return false;
+        }
+        let Some(pane) = self.input.pane_at(local_pos.0, local_pos.1) else {
+            return false;
+        };
+        let Some(band) = self.chart.caption_band_over_book(pane) else {
+            return false;
+        };
+        if !(local_pos.0 >= band.x
+            && local_pos.0 <= band.x + band.w
+            && local_pos.1 >= band.y
+            && local_pos.1 <= band.y + band.h)
+        {
+            return false;
+        }
+        let Some((core, market)) = self
+            .chart
+            .with_container(|container| container.target(pane))
+        else {
+            return false;
+        };
+        let b = self.backend.read(cx);
+        if !self.workspace_action_allowed(&b, core) {
+            return false;
+        }
+        let core_name = b
+            .session
+            .sessions()
+            .iter()
+            .find(|s| s.id == core)
+            .map(|s| s.name.clone())
+            .unwrap_or_default();
+        // The same token the order-line menu writes: the catalog's coin under this core's own
+        // exchange rules, matched by exact text in the blacklists.
+        let coin = b.session.market_source().market_label(core, &market).coin;
+        let ctx = crate::controls::CoinMenuCtx {
+            core,
+            core_name,
+            market,
+            coin,
+            selected_cores: vec![core],
+            strat_id: None,
+            strat_name: None,
+            order_uid: None,
+            workspace_group: self.workspace_group.clone(),
+            side: None,
+            short: false,
+            origin: crate::controls::CoinMenuOrigin::ChartLine,
+            history: None,
+            trailing: Vec::new(),
+        };
+        crate::controls::open_coin_menu(ctx, self.backend.clone(), menu_pos, window, cx);
+        cx.notify();
+        true
+    }
+
     /// Cancel the order under this panel's cursor for the built-in Tab/Delete route.
     ///
     /// `order_hover` identifies the hovered `(core, uid)`. Returns `false` when no order is hovered

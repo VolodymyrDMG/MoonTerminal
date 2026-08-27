@@ -171,3 +171,86 @@ fn orders_release_after_their_own_confirmed_generation() {
         _ => panic!("second order did not release after its settings echo"),
     }
 }
+
+/// FORK (#63): a temp ban composes into the outgoing snapshot as ONE row per symbol with the asked
+/// countdown, replacing any standing row rather than stacking a second timer beside it.
+#[test]
+fn temp_ban_replaces_the_symbols_standing_row() {
+    let mut base = moonproto::ClientSettingsCommand::default();
+    base.set_temp_blacklist_entries([
+        ("ADAUSDT".to_string(), std::time::Duration::from_secs(600)),
+        ("DOGEUSDT".to_string(), std::time::Duration::from_secs(3_600)),
+    ]);
+    let mut sequence = ClientSettingsSequence::new();
+    sequence.enqueue_temp_ban("adausdt".to_string(), 900.0);
+
+    let sent = next_settings(&mut sequence, &base);
+    let rows: Vec<(String, f64)> = sent
+        .temp_blacklist_entries()
+        .map(|row| (row.symbol.to_string(), row.remaining_days()))
+        .collect();
+    // The unrelated row survives untouched; the banned symbol carries the NEW countdown, once,
+    // under the spelling the caller asked for.
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    let doge = rows.iter().find(|(s, _)| s == "DOGEUSDT").expect("doge kept");
+    assert!((doge.1 * 86_400.0 - 3_600.0).abs() < 1.0);
+    let ada = rows.iter().find(|(s, _)| s == "adausdt").expect("ada rewritten");
+    assert!((ada.1 * 86_400.0 - 900.0).abs() < 1.0, "countdown is the asked 15 minutes");
+}
+
+/// FORK (#63): the echoed countdown is a beat BEHIND the asked one, and that echo must retire the
+/// mutation — while a snapshot with the symbol still missing, or still carrying the OLD longer
+/// timer, must not.
+#[test]
+fn temp_ban_retires_on_a_counted_down_echo_only() {
+    let base = moonproto::ClientSettingsCommand::default();
+    let mut sequence = ClientSettingsSequence::new();
+    sequence.enqueue_temp_ban("ADAUSDT".to_string(), 900.0);
+
+    let sent = next_settings(&mut sequence, &base);
+    sequence.observe_update();
+
+    // The core echoes the row ten seconds shorter: this IS our ban, and the queue drains.
+    let mut echo = sent.clone();
+    echo.set_temp_blacklist_entries([(
+        "ADAUSDT".to_string(),
+        std::time::Duration::from_secs(890),
+    )]);
+    assert!(matches!(sequence.next_action(&echo), SequenceAction::Idle));
+
+    // A NEW ban for the same symbol while a longer timer stands is not satisfied by it.
+    sequence.enqueue_temp_ban("ADAUSDT".to_string(), 60.0);
+    let resent = next_settings(&mut sequence, &echo);
+    let row: Vec<f64> = resent
+        .temp_blacklist_entries()
+        .map(|r| r.remaining_days() * 86_400.0)
+        .collect();
+    assert_eq!(row.len(), 1);
+    assert!((row[0] - 60.0).abs() < 1.0, "re-ban deliberately shortens the timer");
+}
+
+/// FORK (#63): an unban drops exactly the asked symbol and retires once the echo comes back bare.
+#[test]
+fn temp_unban_drops_the_row_and_retires_on_the_bare_echo() {
+    let mut base = moonproto::ClientSettingsCommand::default();
+    base.set_temp_blacklist_entries([
+        ("ADAUSDT".to_string(), std::time::Duration::from_secs(600)),
+        ("DOGEUSDT".to_string(), std::time::Duration::from_secs(3_600)),
+    ]);
+    let mut sequence = ClientSettingsSequence::new();
+    sequence.enqueue_temp_unban("ADAUSDT".to_string());
+
+    let sent = next_settings(&mut sequence, &base);
+    let rows: Vec<String> = sent
+        .temp_blacklist_entries()
+        .map(|row| row.symbol.to_string())
+        .collect();
+    assert_eq!(rows, ["DOGEUSDT"]);
+
+    sequence.observe_update();
+    assert!(matches!(sequence.next_action(&sent), SequenceAction::Idle));
+
+    // Unbanning a symbol that is already gone queues nothing to send at all.
+    sequence.enqueue_temp_unban("ADAUSDT".to_string());
+    assert!(matches!(sequence.next_action(&sent), SequenceAction::Idle));
+}

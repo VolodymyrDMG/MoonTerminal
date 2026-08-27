@@ -37,9 +37,21 @@ enum SettingsMutation {
     Edit(ClientSettingsEdit),
     /// Blacklist flag and text, formerly sent through an independent full-snapshot path.
     Blacklist { on: bool, text: String },
+    /// FORK (#63): put one market on the TEMPORARY blacklist for `remaining_days`, replacing any
+    /// standing row for the same symbol.
+    TempBan { symbol: String, remaining_days: f64 },
+    /// FORK (#63): drop one market from the temporary blacklist.
+    TempUnban { symbol: String },
     /// Complete visible group exit state.
     GroupExit(GroupExitSettings),
 }
+
+/// FORK (#63): how much a standing temp-ban countdown may fall short of the asked time and still
+/// read as THIS ban, in days.
+///
+/// The core counts the rows down between our send and its echo, so exact equality never holds;
+/// two minutes generously covers echo latency while staying far under the shortest preset.
+const TEMP_BAN_SLACK_DAYS: f64 = 120.0 / 86_400.0;
 
 /// One queue operation; an order is a serialization barrier between settings generations.
 #[derive(Clone, Debug)]
@@ -99,6 +111,21 @@ impl ClientSettingsSequence {
                 on,
                 text,
             }));
+    }
+
+    /// FORK (#63): queue a temporary ban through the same serializer.
+    pub(super) fn enqueue_temp_ban(&mut self, symbol: String, remaining_secs: f64) {
+        self.queue
+            .push_back(SequenceOp::Mutation(SettingsMutation::TempBan {
+                symbol,
+                remaining_days: (remaining_secs / 86_400.0).max(0.0),
+            }));
+    }
+
+    /// FORK (#63): queue a temporary-ban removal through the same serializer.
+    pub(super) fn enqueue_temp_unban(&mut self, symbol: String) {
+        self.queue
+            .push_back(SequenceOp::Mutation(SettingsMutation::TempUnban { symbol }));
     }
 
     /// Queue a proactive group-settings synchronization.
@@ -243,8 +270,45 @@ fn apply_mutation(settings: &mut moonproto::ClientSettingsCommand, mutation: &Se
             settings.use_coins_black_list = *on;
             settings.coins_black_list_text.clone_from(text);
         }
+        SettingsMutation::TempBan {
+            symbol,
+            remaining_days,
+        } => {
+            // Replace-not-append: MoonBot keeps ONE timer per symbol, and re-banning restarts it.
+            let mut rows = temp_rows_without(settings, symbol);
+            rows.push((
+                symbol.clone(),
+                std::time::Duration::from_secs_f64((remaining_days * 86_400.0).max(0.0)),
+            ));
+            settings.set_temp_blacklist_entries(rows);
+        }
+        SettingsMutation::TempUnban { symbol } => {
+            let rows = temp_rows_without(settings, symbol);
+            settings.set_temp_blacklist_entries(rows);
+        }
         SettingsMutation::GroupExit(exit) => apply_group_exit_settings(settings, *exit),
     }
+}
+
+/// FORK (#63): every temp-blacklist row except `symbol`'s, in the public setter's
+/// `(symbol, remaining)` shape. Case-insensitive like the core's own list matching.
+fn temp_rows_without(
+    settings: &moonproto::ClientSettingsCommand,
+    symbol: &str,
+) -> Vec<(String, std::time::Duration)> {
+    settings
+        .temp_blacklist_entries()
+        .filter(|row| !row.symbol.eq_ignore_ascii_case(symbol))
+        .map(|row| (row.symbol.to_string(), row.remaining_duration()))
+        .collect()
+}
+
+/// FORK (#63): the standing temp-ban countdown for `symbol`, in days, if the list has the row.
+fn temp_remaining_days(settings: &moonproto::ClientSettingsCommand, symbol: &str) -> Option<f64> {
+    settings
+        .temp_blacklist_entries()
+        .find(|row| row.symbol.eq_ignore_ascii_case(symbol))
+        .map(|row| row.remaining_days())
 }
 
 /// Return whether applying a mutation would leave all projected settings unchanged.
@@ -252,6 +316,27 @@ fn mutation_satisfied(
     settings: &moonproto::ClientSettingsCommand,
     mutation: &SettingsMutation,
 ) -> bool {
+    // FORK (#63): the temp rows are DELIBERATELY outside the `ClientSettings` projection (their
+    // countdown would wedge the echo comparison), so the generic projection rule below would call
+    // every temp mutation satisfied before it was ever sent. Each answers its real question
+    // instead: does a standing row already say what this mutation asks?
+    match mutation {
+        SettingsMutation::TempBan {
+            symbol,
+            remaining_days,
+        } => {
+            // Satisfied only by a countdown that IS this ban, a beat behind at most: a LONGER
+            // standing ban is not it (a re-ban deliberately shortens), and a shorter one has to
+            // be re-armed.
+            return temp_remaining_days(settings, symbol).is_some_and(|standing| {
+                standing <= *remaining_days && standing >= *remaining_days - TEMP_BAN_SLACK_DAYS
+            });
+        }
+        SettingsMutation::TempUnban { symbol } => {
+            return temp_remaining_days(settings, symbol).is_none();
+        }
+        _ => {}
+    }
     let before = client_settings_from_proto(settings);
     let mut after = settings.clone();
     apply_mutation(&mut after, mutation);
