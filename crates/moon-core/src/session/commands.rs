@@ -794,6 +794,24 @@ impl SessionManager {
         self.send_core_cmd(core, CoreCmd::SetBlacklist { on, text }, "set blacklist")
     }
 
+    /// FORK (#63): put a market on the core's TEMPORARY blacklist for `remaining_secs` — MoonBot's
+    /// «ЧС на время». The core owns the countdown and lifts the ban itself.
+    pub fn temp_ban_coin(&self, core: CoreId, symbol: String, remaining_secs: f64) -> Result<()> {
+        self.send_core_cmd(
+            core,
+            CoreCmd::TempBan {
+                symbol,
+                remaining_secs,
+            },
+            "temp ban coin",
+        )
+    }
+
+    /// FORK (#63): lift a market's temporary ban before its time runs out.
+    pub fn temp_unban_coin(&self, core: CoreId, symbol: String) -> Result<()> {
+        self.send_core_cmd(core, CoreCmd::TempUnban { symbol }, "temp unban coin")
+    }
+
     /// Locally exclude blacklisted coins from the core's Active Lib market-delta calculation.
     pub fn set_exclude_blacklisted_delta(&self, core: CoreId, on: bool) -> Result<()> {
         self.send_core_cmd(

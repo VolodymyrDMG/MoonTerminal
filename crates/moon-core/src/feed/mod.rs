@@ -550,6 +550,13 @@ pub enum CoreCmd {
     /// `use_coins_black_list`/`coins_black_list_text` in the retained settings snapshot and sends
     /// it in full.
     SetBlacklist { on: bool, text: String },
+    /// FORK (#63): put a market on the core's TEMPORARY blacklist for the given time — MoonBot's
+    /// «ЧС на время». The feed rewrites the retained snapshot's TempBL rows (replacing any row for
+    /// the same symbol) and sends the settings in full; the CORE owns the countdown and drops the
+    /// row itself, so no terminal timer is involved.
+    TempBan { symbol: String, remaining_secs: f64 },
+    /// FORK (#63): remove a market from the core's temporary blacklist before its time runs out.
+    TempUnban { symbol: String },
     /// Locally exclude blacklisted coins from the Active Lib market-delta calculation. This is
     /// not a wire settings field; it uses moonproto
     /// `settings().set_exclude_blacklisted_markets_from_exchange_delta`.

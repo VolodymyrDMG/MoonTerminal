@@ -807,6 +807,19 @@ pub struct LicenseState {
     pub news_trial_used: bool,
 }
 
+/// FORK (#63): one row of the core's TEMPORARY coin blacklist — MoonBot's «ЧС на время».
+///
+/// The wire value is a REMAINING duration the core counts down, not a deadline: the row is only
+/// meaningful together with the moment it was received, which the store stamps beside the list.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TempBanRow {
+    /// Market symbol as the core spells it, e.g. `ADAUSDT` — the temp list matches MARKETS,
+    /// unlike the permanent list's coin tokens.
+    pub symbol: String,
+    /// Remaining ban time at the snapshot, in DAYS (the protocol's own unit).
+    pub remaining_days: f64,
+}
+
 /// Core client-settings snapshot from moonproto `ClientSettings`, flattened for toolbar TP, SL,
 /// and sell presets. This is decoupled from moonproto: raw fields such as `s_price` and `sb_num`
 /// are `pub(crate)` in production and are read only through the command's public helpers.
@@ -1156,6 +1169,14 @@ pub enum FeedMsg {
     /// Core client-settings snapshot for TP, SL, sell, iceberg, and related settings, sent on
     /// `ClientSettingsUpdated`.
     ClientSettings(ClientSettings),
+    /// FORK (#63): the core's TEMPORARY coin blacklist rows, sent beside [`Self::ClientSettings`]
+    /// from the same `ClientSettingsUpdated` snapshot.
+    ///
+    /// A SEPARATE message rather than fields on [`ClientSettings`], deliberately: that struct is
+    /// the settings-serializer's echo-equality projection, and the temp rows carry a countdown the
+    /// core decrements between snapshots — folding them in would make every echo comparison fail
+    /// and wedge the settings queue behind a clock.
+    TempBlacklist(Vec<TempBanRow>),
     /// Core runtime and passive-mode state sent on `RuntimeStateUpdated`.
     RuntimeState(RuntimeState),
     /// Projection of the core's full safe-share configuration, sent on `SharedConfigUpdated`,

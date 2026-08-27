@@ -61,3 +61,35 @@ fn a_caption_above_the_book_does_not_grow_the_zone() {
             .unwrap();
     assert_eq!((zone.y, zone.h), (200.0, 400.0));
 }
+
+/// FORK (#63): the caption band is EXACTLY what the order zone excludes — the two must tile the
+/// painted book with no gap and no overlap, or a pixel row would either trade AND open the menu
+/// or do neither.
+#[test]
+fn caption_band_and_order_zone_tile_the_book() {
+    use super::caption_band_over_book;
+
+    let book = [400.0, 50.0, 200.0, 600.0];
+    let origin = [100.0, 50.0];
+    let band = caption_band_over_book(book, origin, Some(75.0), 2.0).expect("captions drawn");
+    let zone = book_zone_below_captions(book, origin, Some(75.0), 2.0).expect("room below");
+
+    assert_eq!((band.x, band.w), (zone.x, zone.w));
+    assert_eq!(band.y, 0.0);
+    assert_eq!(band.y + band.h, zone.y, "band ends exactly where the zone starts");
+    assert_eq!(zone.y + zone.h, 600.0);
+}
+
+/// No captions drawn → no band at all: a right-click at the book's top is then an ordinary book
+/// click, not a menu on a name that is not there.
+#[test]
+fn no_captions_means_no_band() {
+    use super::caption_band_over_book;
+
+    assert!(caption_band_over_book([400.0, 0.0, 200.0, 600.0], [0.0, 0.0], None, 1.0).is_none());
+    // And a caption bottom above the book's own top yields an empty band, not a negative one.
+    assert!(
+        caption_band_over_book([400.0, 200.0, 200.0, 400.0], [0.0, 0.0], Some(50.0), 1.0)
+            .is_none()
+    );
+}

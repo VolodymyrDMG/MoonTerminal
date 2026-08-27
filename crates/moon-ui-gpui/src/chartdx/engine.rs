@@ -935,6 +935,24 @@ impl ChartEngine {
         )
     }
 
+    /// FORK (#63): the coin-name caption band over the painted book — the strip
+    /// [`Self::painted_book_zone`] excludes — in the chart's own device pixels. A right-click here
+    /// is aimed at the coin's NAME.
+    pub fn caption_band_over_book(&self, pane: usize) -> Option<moon_chart::view::Rect> {
+        let data = self.data.borrow();
+        let render = data.render.borrow();
+        let pr = render.panes.get(pane)?;
+        if !pr.active {
+            return None;
+        }
+        crate::chartdx::caption_band_over_book(
+            pr.orderbook_view.bounds,
+            render.slot_origin,
+            pr.zone_top_caption_bottom,
+            render.pixel_scale.max(0.1),
+        )
+    }
+
     /// Applies the GLOBAL arbitrage roster — which venues the column lists, in what order, under
     /// what name and colour. Returns true on change.
     ///

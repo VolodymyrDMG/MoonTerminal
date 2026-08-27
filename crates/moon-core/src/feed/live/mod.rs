@@ -1406,17 +1406,28 @@ pub(super) fn run(
             &client,
             |ev| matches!(ev, &Event::Settings(SettingsEvent::ClientSettingsUpdated)),
             |state| {
-                state
-                    .settings()
-                    .client_settings
-                    .as_ref()
-                    .map(client_settings_from_proto)
+                state.settings().client_settings.as_ref().map(|c| {
+                    // FORK (#63): the temp rows ride the same snapshot but travel as their own
+                    // message — see `FeedMsg::TempBlacklist` for why they must not live on the
+                    // echo-compared `ClientSettings` projection.
+                    let temp: Vec<crate::feed::TempBanRow> = c
+                        .temp_blacklist_entries()
+                        .map(|row| crate::feed::TempBanRow {
+                            symbol: row.symbol.to_string(),
+                            remaining_days: row.remaining_days(),
+                        })
+                        .collect();
+                    (client_settings_from_proto(c), temp)
+                })
             },
         );
-        if let Some(settings) = client_settings {
+        if let Some((settings, temp)) = client_settings {
             client_settings_sequence.observe_update();
             client_settings_sequence.drive(&client, server.id);
             if tx.send(FeedMsg::ClientSettings(settings)).is_err() {
+                break;
+            }
+            if tx.send(FeedMsg::TempBlacklist(temp)).is_err() {
                 break;
             }
         }

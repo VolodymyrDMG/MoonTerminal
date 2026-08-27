@@ -514,6 +514,15 @@ pub(super) fn mouse_down_right(
         cx.stop_propagation();
         return;
     }
+    // FORK (#63): the rest of the caption band over the book is the coin's NAME — its right click
+    // opens the coin menu with the blacklist actions. After the venue and volume checks above, so
+    // the specific targets inside the band keep their own menus.
+    if within && this.try_open_caption_coin_menu(pos, e.position, window, cx) {
+        this.suppress_rmb_up = true;
+        cx.notify();
+        cx.stop_propagation();
+        return;
+    }
     // Right-clicking a drawn figure in drawing mode opens its Alert/Delete menu. This has highest
     // priority; suppress_rmb_up consumes the paired release so fullscreen remains intact.
     if within && this.try_open_figure_menu(pos, e.position, window, cx) {
