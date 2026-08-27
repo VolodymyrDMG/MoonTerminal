@@ -1178,6 +1178,10 @@ chart.candles.tip:
   ru: "Настройки свечей и сделок"
   en: "Candles and trades settings"
   es: "Ajustes de velas y operaciones"
+chart.arb.no_core:
+  ru: "Нет подключённого ядра этой биржи с этой монетой"
+  en: "No connected core on that exchange trades this coin"
+  es: "Ningún núcleo conectado de ese exchange opera esta moneda"
 chart.candles.frame_candles:
   ru: "Свечи"
   en: "Candles"
