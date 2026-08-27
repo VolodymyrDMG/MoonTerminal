@@ -923,6 +923,58 @@ coin_menu.tbl_clear:
   ru: "Снять"
   en: "Lift the ban"
   es: "Levantar la prohibición"
+coin_menu.bl_core:
+  ru: "В ЧС ядра «%{core}»"
+  en: "Add to core «%{core}» blacklist"
+  es: "Añadir a la lista negra del núcleo «%{core}»"
+general.fill_sound:
+  ru: "Звук при сработке моего ордера"
+  en: "Sound when my order executes"
+  es: "Sonido cuando se ejecuta mi orden"
+general.fill_sound_hint:
+  ru: "Только ручные ордера (не стратегийные). Выбор звука сразу проигрывает его."
+  en: "Manual orders only (not strategy ones). Picking a sound plays it right away."
+  es: "Solo órdenes manuales (no de estrategias). Elegir un sonido lo reproduce al instante."
+coin_menu.temp_ban_15m:
+  ru: "В ЧС на 15 минут"
+  en: "Ban for 15 minutes"
+  es: "Vetar por 15 minutos"
+coin_menu.temp_ban_1h:
+  ru: "В ЧС на 1 час"
+  en: "Ban for 1 hour"
+  es: "Vetar por 1 hora"
+coin_menu.temp_ban_4h:
+  ru: "В ЧС на 4 часа"
+  en: "Ban for 4 hours"
+  es: "Vetar por 4 horas"
+coin_menu.temp_ban_24h:
+  ru: "В ЧС на 24 часа"
+  en: "Ban for 24 hours"
+  es: "Vetar por 24 horas"
+coin_menu.temp_unban:
+  ru: "Снять врем. ЧС (ещё %{left})"
+  en: "Lift temp ban (%{left} left)"
+  es: "Quitar veto temporal (quedan %{left})"
+coin_menu.unit_h:
+  ru: "ч"
+  en: "h"
+  es: "h"
+coin_menu.unit_m:
+  ru: "м"
+  en: "m"
+  es: "m"
+coin_menu.unit_s:
+  ru: "с"
+  en: "s"
+  es: "s"
+coin_menu.bl_cores:
+  ru: "В ЧС выбранных ядер (%{n})"
+  en: "Add to blacklist of selected cores (%{n})"
+  es: "Añadir a la lista negra de núcleos seleccionados (%{n})"
+coin_menu.bl_strategy:
+  ru: "В ЧС стратегии «%{name}»"
+  en: "Add to strategy «%{name}» blacklist"
+  es: "Añadir a la lista negra de la estrategia «%{name}»"
 coin_menu.strategy_goto:
   ru: "Перейти к стратегии"
   en: "Go to strategy"

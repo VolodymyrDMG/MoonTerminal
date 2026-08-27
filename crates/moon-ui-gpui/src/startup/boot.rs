@@ -333,6 +333,7 @@ pub(super) fn boot(cfg: AppConfig, input: BootInput, cx: &mut App) {
         last_orders_alert_rev: std::collections::HashMap::new(),
         price_alert_near: std::collections::HashMap::new(),
         default_alert_sound: "ding1".to_string(),
+        fill_watch: std::collections::HashMap::new(),
         // Seeded right after construction from the persisted schedule, once the clock zone is
         // settled; see `refresh_quiet_state` below.
         quiet_sleeping: false,
@@ -584,6 +585,8 @@ pub(super) fn boot(cfg: AppConfig, input: BootInput, cx: &mut App) {
                     // used this drain's one sound: both go through the same player, which replaces
                     // what it is playing rather than mixing.
                     b.play_price_alert_sounds(detect_played);
+                    // FORK (#64): and the fill sound for manual orders that just executed.
+                    b.play_fill_sounds();
                     if drain.order_lines_data {
                         let chart_consumers = b.live_chart_consumers();
                         for chart in chart_consumers {

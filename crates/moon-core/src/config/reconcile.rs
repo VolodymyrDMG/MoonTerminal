@@ -61,6 +61,10 @@ pub struct Merged {
     pub core_sort: CoreSortMode,
     /// Which conversion every quote-money surface applies.
     pub report_valuation_mode: ValuationMode,
+    /// FORK (#64): play a sound when a manual order fills.
+    pub fill_sound_on: bool,
+    /// FORK (#64): which embedded sound plays, by file stem.
+    pub fill_sound: String,
     /// Durable uid counter, already advanced past any uid handed out during this merge.
     pub next_uid: UidCounter,
     /// Legacy hotkeys from settings.toml (schema < v13), used only for one-time migration
@@ -106,6 +110,8 @@ pub fn merge(sf: ServersFile, meta: SettingsFile, uid_floor: Option<u64>) -> Mer
     let chart_memory_percent = clamp_chart_memory_percent(meta.chart_memory_percent);
     let core_sort = meta.core_sort;
     let report_valuation_mode = meta.report_valuation_mode;
+    let fill_sound_on = meta.fill_sound_on;
+    let fill_sound = meta.fill_sound;
     let hotkeys = meta.hotkeys;
     let mut groups = meta.groups.clone();
     for group in &mut groups {
@@ -221,6 +227,8 @@ pub fn merge(sf: ServersFile, meta: SettingsFile, uid_floor: Option<u64>) -> Mer
         chart_memory_percent,
         core_sort,
         report_valuation_mode,
+        fill_sound_on,
+        fill_sound,
         next_uid,
         hotkeys,
         dirty,
@@ -255,6 +263,8 @@ pub fn split(
     chart_memory_percent: u16,
     core_sort: CoreSortMode,
     report_valuation_mode: ValuationMode,
+    fill_sound_on: bool,
+    fill_sound: String,
     next_uid: u64,
 ) -> (ServersFile, SettingsFile) {
     let sf = ServersFile {
@@ -290,6 +300,8 @@ pub fn split(
         core_groups: core_groups.to_vec(),
         core_sort,
         report_valuation_mode,
+        fill_sound_on,
+        fill_sound,
         next_uid,
         servers: servers
             .iter()

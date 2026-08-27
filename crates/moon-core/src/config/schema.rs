@@ -117,6 +117,12 @@ pub fn default_chart_stack_height() -> u16 {
     360
 }
 
+/// FORK (#64): the embedded sound a manual-order fill plays when none is chosen — the stem of one
+/// of the WAVs the UI ships for alerts, so the fill signal needs no asset of its own.
+pub fn default_fill_sound() -> String {
+    "gold".to_string()
+}
+
 pub fn clamp_chart_stack_height(value: u16) -> u16 {
     value.clamp(120, 2000)
 }
@@ -384,6 +390,13 @@ pub struct SettingsFile {
     /// materializes the key.
     #[serde(default)]
     pub report_valuation_mode: ValuationMode,
+    /// FORK (#64): play a sound when a MANUAL order fills. Defaults off, and no schema bump for
+    /// the same reason as `report_valuation_mode` above: the serde default IS the intended one.
+    #[serde(default)]
+    pub fill_sound_on: bool,
+    /// FORK (#64): which embedded sound plays, by file stem; missing values default to `gold`.
+    #[serde(default = "default_fill_sound")]
+    pub fill_sound: String,
     /// Next uid to issue, persisted so deleted identities are not reused.
     ///
     /// Zero falls back to one past the highest surviving uid. This field is the only durable

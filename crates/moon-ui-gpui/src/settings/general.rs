@@ -134,6 +134,51 @@ impl SettingsView {
         }
     }
 
+    /// FORK (#64): the fill-sound picker — the embedded sound set, current one checked, selection
+    /// written to the DRAFT and played at once as its own preview.
+    fn fill_sound_dropdown(&self, cur: &str, cx: &Context<Self>) -> impl IntoElement {
+        use moon_ui::{MoonButtonVariant, MoonDropdown};
+
+        let backend = self.backend.clone();
+        let view = cx.entity();
+        let options: Vec<(&'static str, SharedString, SharedString)> = crate::media::sound::names()
+            .map(|n| {
+                (
+                    n,
+                    SharedString::from(format!("fill-snd-{n}")),
+                    SharedString::from(n),
+                )
+            })
+            .collect();
+        let cur_static = crate::media::sound::names()
+            .find(|n| *n == cur)
+            .unwrap_or("gold");
+        let items = crate::panels::radio_items(
+            options,
+            cur_static,
+            crate::panels::RadioMark::Check,
+            move |app, name: &'static str| {
+                backend.update(app, |b, bcx| {
+                    if let Some(p) = b.preview.as_mut() {
+                        p.fill_sound = name.to_string();
+                    }
+                    bcx.notify();
+                });
+                view.update(app, |_, cx| cx.notify());
+                crate::media::sound::play(name);
+            },
+        );
+        MoonDropdown::new("fill-sound-pick")
+            .label(SharedString::from(cur_static))
+            .trigger_caret(true)
+            .trigger_variant(MoonButtonVariant::Soft)
+            .trigger_size(MoonButtonSize::Action)
+            .trigger_width_scaled(120.0)
+            .menu_width_scaled(150.0)
+            .menu_size(MoonMenuSize::Compact)
+            .items(items)
+    }
+
     /// Build a `<<  <  value  >  >>` stepper row with small and large adjustments.
     /// Shared by second/day counters and the Storage version limit; `adjust` owns clamping.
     pub(super) fn stepper_controls(
@@ -243,7 +288,7 @@ impl SettingsView {
     pub(super) fn general_tab(&self, cx: &Context<Self>) -> impl IntoElement {
         let p = MoonPalette::active(cx);
         let muted = rgba_from(p.text_muted, 1.0);
-        let (split, auto_activate, scz, idle_secs, logf, ret) = {
+        let (split, auto_activate, scz, idle_secs, logf, ret, fill_on, fill_sound) = {
             let b = self.backend.read(cx);
             let d = b.preview.as_ref().unwrap_or(&b.config);
             (
@@ -253,6 +298,8 @@ impl SettingsView {
                 d.main_idle_close_secs,
                 d.log_to_file,
                 d.log_retention_days,
+                d.fill_sound_on,
+                d.fill_sound.clone(),
             )
         };
         // Remember the last valid enabled timeout and restore it when the checkbox is re-enabled.
@@ -418,6 +465,29 @@ impl SettingsView {
                 &t!("general.main_idle_close_hint"),
                 muted,
             ))
+            .child(super::separator(p, cx))
+            // FORK (#64): sound on a MANUAL order's execution, with the embedded-sound picker.
+            // Selecting a sound plays it immediately — the same preview contract the Alerts
+            // panel's default-sound dropdown established.
+            .child(
+                h_flex()
+                    .gap(design::ui_px(cx, 10.0))
+                    .items_center()
+                    .child(
+                        self.draft_checkbox(cx, "fill-sound", fill_on, |p, v| {
+                            if p.fill_sound_on != v {
+                                p.fill_sound_on = v;
+                                true
+                            } else {
+                                false
+                            }
+                        })
+                        .label(t!("general.fill_sound").to_string())
+                        .size(MoonCheckboxSize::Normal),
+                    )
+                    .child(self.fill_sound_dropdown(&fill_sound, cx)),
+            )
+            .child(hint(&t!("general.fill_sound_hint")))
             .child(super::separator(p, cx))
             // Stack layout is now configured per tab from the chart-tabs layout popup.
             // File logging and retention period.
