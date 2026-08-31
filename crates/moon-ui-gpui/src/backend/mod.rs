@@ -4,8 +4,8 @@
 
 pub(crate) mod core_warn;
 mod detect_sound;
-mod fill_sound;
 mod figures;
+mod fill_sound;
 mod manual_trading;
 mod open_request;
 mod quiet;

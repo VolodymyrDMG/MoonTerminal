@@ -37,8 +37,7 @@ fn an_unpainted_book_yields_no_zone() {
 /// With no captions drawn over the book, the whole painted strip trades.
 #[test]
 fn no_captions_leaves_the_whole_strip() {
-    let zone =
-        book_zone_below_captions([400.0, 0.0, 220.0, 800.0], [0.0, 0.0], None, 1.0).unwrap();
+    let zone = book_zone_below_captions([400.0, 0.0, 220.0, 800.0], [0.0, 0.0], None, 1.0).unwrap();
     assert_eq!((zone.y, zone.h), (0.0, 800.0));
 }
 
@@ -56,9 +55,8 @@ fn captions_covering_the_book_leave_no_zone() {
 /// the max() with the book's own top is what pins it.
 #[test]
 fn a_caption_above_the_book_does_not_grow_the_zone() {
-    let zone =
-        book_zone_below_captions([400.0, 200.0, 220.0, 400.0], [0.0, 0.0], Some(50.0), 1.0)
-            .unwrap();
+    let zone = book_zone_below_captions([400.0, 200.0, 220.0, 400.0], [0.0, 0.0], Some(50.0), 1.0)
+        .unwrap();
     assert_eq!((zone.y, zone.h), (200.0, 400.0));
 }
 
@@ -76,7 +74,11 @@ fn caption_band_and_order_zone_tile_the_book() {
 
     assert_eq!((band.x, band.w), (zone.x, zone.w));
     assert_eq!(band.y, 0.0);
-    assert_eq!(band.y + band.h, zone.y, "band ends exactly where the zone starts");
+    assert_eq!(
+        band.y + band.h,
+        zone.y,
+        "band ends exactly where the zone starts"
+    );
     assert_eq!(zone.y + zone.h, 600.0);
 }
 
@@ -89,7 +91,6 @@ fn no_captions_means_no_band() {
     assert!(caption_band_over_book([400.0, 0.0, 200.0, 600.0], [0.0, 0.0], None, 1.0).is_none());
     // And a caption bottom above the book's own top yields an empty band, not a negative one.
     assert!(
-        caption_band_over_book([400.0, 200.0, 200.0, 400.0], [0.0, 0.0], Some(50.0), 1.0)
-            .is_none()
+        caption_band_over_book([400.0, 200.0, 200.0, 400.0], [0.0, 0.0], Some(50.0), 1.0).is_none()
     );
 }

@@ -44,7 +44,7 @@ impl ChartTabs {
     /// Returns:
     ///     Query matches or cached suggestions within the active tab's search scope.
     pub(super) fn coin_results(&self, cx: &App) -> crate::controls::coin_search::CoinResults {
-        use crate::controls::coin_search::{suggestions, CoinResults};
+        use crate::controls::coin_search::{CoinResults, suggestions};
 
         let b = self.backend.read(cx);
         let bucket = self.coin_bucket(b);

@@ -9,14 +9,14 @@
 
 use gpui::*;
 use moon_ui::{
-    h_flex, rgba_from, v_flex, MoonBadge, MoonBadgeSize, MoonBadgeVariant, MoonPalette, MoonText,
+    MoonBadge, MoonBadgeSize, MoonBadgeVariant, MoonPalette, MoonText, h_flex, rgba_from, v_flex,
 };
 
 use rust_i18n::t;
 
 use moon_core::config::{
-    detect_slot_count, BadgesConfig, DetectChart, DetectField, DetectSizeCfg, DetectSlot,
-    DetectViewCfg, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI,
+    BadgesConfig, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart,
+    DetectField, DetectSizeCfg, DetectSlot, DetectViewCfg, detect_slot_count,
 };
 
 use super::DetectItem;
@@ -601,7 +601,7 @@ fn chart_el(
         // ticks were unavailable.
         DetectChart::Ticks => {
             ticks_canvas(&it.ticks, theme, win_ms).or_else(|| candle_canvas(&it.bars, theme))
-    }
+        }
     }
 }
 

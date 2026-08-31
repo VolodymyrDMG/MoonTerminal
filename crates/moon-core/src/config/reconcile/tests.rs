@@ -440,6 +440,8 @@ fn the_transport_survives_a_split() {
         100,
         crate::config::CoreSortMode::default(),
         crate::db::valuation::ValuationMode::default(),
+        false,
+        crate::config::schema::default_fill_sound(),
         8,
     );
 

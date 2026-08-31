@@ -659,9 +659,7 @@ fn a_replica_without_cema_tables_still_answers_with_null_columns() {
     let (q, src) = tuner_source_on(&conn, &q).expect("source without cema tables");
     let (n, nulls): (i64, i64) = conn
         .query_row(
-            &format!(
-                "SELECT COUNT(*), SUM(o.\"cema_min12h\" IS NULL) FROM {src}"
-            ),
+            &format!("SELECT COUNT(*), SUM(o.\"cema_min12h\" IS NULL) FROM {src}"),
             rusqlite::params![q.from, q.to],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )

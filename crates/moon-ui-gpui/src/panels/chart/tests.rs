@@ -131,4 +131,3 @@ fn volume_measure_sits_between_figures_and_trading_in_the_press_chain() {
         "a stationary click must clear the bracket"
     );
 }
-

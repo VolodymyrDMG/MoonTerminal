@@ -146,8 +146,8 @@ pub(super) fn apply(
         }
     }
     {
-        let mut off = conn
-            .prepare_cached("INSERT OR REPLACE INTO cema_scan (file, off) VALUES (?1, ?2)")?;
+        let mut off =
+            conn.prepare_cached("INSERT OR REPLACE INTO cema_scan (file, off) VALUES (?1, ?2)")?;
         for (file, o) in offsets {
             off.execute(rusqlite::params![file, *o as i64])?;
         }
@@ -183,11 +183,7 @@ pub(super) fn apply(
 /// Returns:
 ///     Harvested rows, the last rowid seen (the new mark), and whether the chunk was FULL —
 ///     `None` when the replica lacks the needed columns or cannot answer.
-fn comment_chunk(
-    conn: &Connection,
-    from_rowid: i64,
-    now_ms: i64,
-) -> Option<(Vec<Row>, i64, bool)> {
+fn comment_chunk(conn: &Connection, from_rowid: i64, now_ms: i64) -> Option<(Vec<Row>, i64, bool)> {
     // Report dates are UNIX SECONDS (see `analytics::time_zone` and the valuation worker's
     // `closedate.div_euclid(60)`), so the retention cut is applied in seconds and the harvested
     // stamp is scaled to the milliseconds every other `cema_vals` row uses. The first version
@@ -543,11 +539,9 @@ pub fn sweep_and_send(servers: &[SweepServer], sink: &super::ReportSink) {
             continue; // The app log, or a server this terminal no longer knows.
         };
         let from_off = conn
-            .query_row(
-                "SELECT off FROM cema_scan WHERE file = ?1",
-                [name],
-                |r| r.get::<_, i64>(0),
-            )
+            .query_row("SELECT off FROM cema_scan WHERE file = ?1", [name], |r| {
+                r.get::<_, i64>(0)
+            })
             .ok()
             .map_or(0, |o| o.max(0) as u64);
         let deal_tasks = deal_cache.entry(uid).or_insert_with(|| {
@@ -564,14 +558,8 @@ pub fn sweep_and_send(servers: &[SweepServer], sink: &super::ReportSink) {
             set.extend(found.flatten());
             set
         });
-        let Some(take) = scan_file(
-            &entry.path(),
-            from_off,
-            uid,
-            date_ms,
-            deal_tasks,
-            now_ms,
-        ) else {
+        let Some(take) = scan_file(&entry.path(), from_off, uid, date_ms, deal_tasks, now_ms)
+        else {
             continue;
         };
         rows.extend(take.rows);

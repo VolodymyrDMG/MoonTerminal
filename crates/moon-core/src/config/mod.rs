@@ -24,7 +24,6 @@ pub mod core_groups;
 pub mod core_updates;
 pub mod crypto;
 pub mod detect_view;
-pub mod vol_view;
 pub mod groups;
 pub mod hotkeys;
 pub mod lang;
@@ -40,6 +39,7 @@ pub mod storage;
 pub mod tab_badges;
 pub mod theme;
 pub mod theme_legacy;
+pub mod vol_view;
 
 mod backup;
 mod migrate;
@@ -69,7 +69,6 @@ pub use core_groups::{
     sanitize_core_groups, unique_group_name,
 };
 pub use core_updates::CoreUpdateHistory;
-pub use vol_view::{VOL_HEIGHT_L, VOL_HEIGHT_M, VOL_HEIGHT_S, VolViewCfg, VolViewFile};
 pub use detect_view::{
     DETECT_RAIL_MAX, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart,
     DetectField, DetectSizeCfg, DetectSlot, DetectViewCfg, DetectViewFile, detect_slot_count,
@@ -100,6 +99,7 @@ pub use servers::{
 };
 pub use tab_badges::TabBadgeSettings;
 pub use theme::{ChartTheme, ChartThemeSet};
+pub use vol_view::{VOL_HEIGHT_L, VOL_HEIGHT_M, VOL_HEIGHT_S, VolViewCfg, VolViewFile};
 // Keep the counter private to `config` so external code cannot construct or replace it.
 use uid_counter::UidCounter;
 

@@ -26,9 +26,11 @@ fn presentation_scope_keeps_hidden_detection_cards_retained() {
         .collect();
     assert_eq!(selected, vec![22]);
     assert_eq!(retained, vec![11, 22, 11]);
-    assert!(retained
-        .iter()
-        .all(|core| detection_core_visible(*core, &[11, 22])));
+    assert!(
+        retained
+            .iter()
+            .all(|core| detection_core_visible(*core, &[11, 22]))
+    );
 
     let src = include_str!("mod.rs");
     let ingest = ingest_body();

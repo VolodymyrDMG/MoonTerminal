@@ -241,8 +241,7 @@ fn build_items(ctx: CoinMenuCtx, backend: &Entity<Backend>, cx: &App) -> Vec<Moo
                         backend_u.update(app, |b, _| {
                             if workspace_action_allows_cores(b, workspace_group.as_deref(), &[core])
                             {
-                                if let Err(err) =
-                                    b.session.temp_unban_coin(core, market_u.clone())
+                                if let Err(err) = b.session.temp_unban_coin(core, market_u.clone())
                                 {
                                     log::warn!("coin_menu: temp unban {market_u} failed: {err:#}");
                                 }
@@ -606,7 +605,11 @@ fn fmt_ban_left(secs: f64) -> String {
     let secs = secs.max(0.0) as i64;
     let (h, m) = (secs / 3_600, (secs % 3_600) / 60);
     if h > 0 {
-        format!("{h}{} {m}{}", t!("coin_menu.unit_h"), t!("coin_menu.unit_m"))
+        format!(
+            "{h}{} {m}{}",
+            t!("coin_menu.unit_h"),
+            t!("coin_menu.unit_m")
+        )
     } else if m > 0 {
         format!("{m}{}", t!("coin_menu.unit_m"))
     } else {
