@@ -117,7 +117,10 @@ fn trade_mark_uses_the_report_stamps_without_any_tape_input() {
     assert_eq!(mark.close_ms, 1_700_000_900_000);
 }
 
+// FORK: three of these serve only the Windows-gated prover below.
+#[cfg_attr(not(windows), allow(unused_imports))]
 use super::{TradeGeometry, TradeHoverChange, built_span, take_trade_geometry_builds};
+#[cfg_attr(not(windows), allow(unused_imports))]
 use crate::chartdx::{ChartEngine, PaneRender};
 use moon_chart::view::ChartView;
 use moon_core::config::ChartTheme;
@@ -233,6 +236,9 @@ fn built_span_covers_every_view_with_its_key_and_the_signature_follows_the_cell(
 /// that can patch, or `patch_trade_hover` missing the previous arrow, makes every hover rebuild
 /// every pane (or leaves the old arrow drawn hot). A hover change must patch exactly the old and
 /// the new arrow, with no geometry build.
+// FORK: `chartdx::userdata` (the DX11 marker patch counter) is a Windows-only module, so this
+// prover compiles only there — the Linux suite this fork also runs would otherwise not build.
+#[cfg(windows)]
 #[test]
 fn hover_change_patches_two_arrows_without_a_rebuild() {
     let engine = ChartEngine::new(0.0, ChartTheme::default());

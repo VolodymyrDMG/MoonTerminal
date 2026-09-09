@@ -80,7 +80,12 @@ fn a_drag_between_presses_breaks_the_pair() {
     // Motion inside the threshold is a hand tremor, not a drag.
     series.drag_beyond((SPOT.0 + 42.0, SPOT.1), 6.0);
     assert_eq!(
-        series.observe(MouseButton::Left, 1, SOON_MS + SOON_MS, (SPOT.0 + 44.0, SPOT.1)),
+        series.observe(
+            MouseButton::Left,
+            1,
+            SOON_MS + SOON_MS,
+            (SPOT.0 + 44.0, SPOT.1)
+        ),
         2
     );
 }

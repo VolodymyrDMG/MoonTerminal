@@ -93,6 +93,7 @@ fn retired_keys_leave_the_persistence_pipeline_quietly() {
         merged.language,
         merged.market_mode,
         merged.charts_split_by_core,
+        merged.charts_auto_activate,
         merged.charts_stack_scroll,
         merged.charts_stack_compress,
         merged.chart_stack_height,
@@ -106,6 +107,8 @@ fn retired_keys_leave_the_persistence_pipeline_quietly() {
         merged.chart_memory_percent,
         merged.core_sort,
         merged.report_valuation_mode,
+        merged.fill_sound_on,
+        merged.fill_sound,
         merged.next_uid.get(),
         merged.telegram,
     );
@@ -130,6 +133,7 @@ fn global_book_width_survives_runtime_reconciliation_and_save() {
         merged.language,
         merged.market_mode,
         merged.charts_split_by_core,
+        false, // FORK: charts_auto_activate
         merged.charts_stack_scroll,
         merged.charts_stack_compress,
         merged.chart_stack_height,
@@ -143,6 +147,8 @@ fn global_book_width_survives_runtime_reconciliation_and_save() {
         merged.chart_memory_percent,
         merged.core_sort,
         merged.report_valuation_mode,
+        false, // FORK: fill_sound_on
+        crate::config::schema::default_fill_sound(),
         merged.next_uid.get(),
         merged.telegram,
     );
@@ -491,6 +497,7 @@ fn the_station_tick_round_trips_and_an_older_file_reads_it_off() {
         merged.language,
         merged.market_mode,
         merged.charts_split_by_core,
+        false, // FORK: charts_auto_activate
         merged.charts_stack_scroll,
         merged.charts_stack_compress,
         merged.chart_stack_height,
@@ -504,6 +511,8 @@ fn the_station_tick_round_trips_and_an_older_file_reads_it_off() {
         merged.chart_memory_percent,
         merged.core_sort,
         merged.report_valuation_mode,
+        false, // FORK: fill_sound_on
+        crate::config::schema::default_fill_sound(),
         merged.next_uid.get(),
         TelegramConfig::default(),
     );
@@ -549,6 +558,7 @@ fn the_endpoint_override_round_trips_through_servers_enc() {
         merged.language,
         merged.market_mode,
         merged.charts_split_by_core,
+        false, // FORK: charts_auto_activate
         merged.charts_stack_scroll,
         merged.charts_stack_compress,
         merged.chart_stack_height,
@@ -562,6 +572,8 @@ fn the_endpoint_override_round_trips_through_servers_enc() {
         merged.chart_memory_percent,
         merged.core_sort,
         merged.report_valuation_mode,
+        false, // FORK: fill_sound_on
+        crate::config::schema::default_fill_sound(),
         merged.next_uid.get(),
         TelegramConfig::default(),
     );
@@ -638,6 +650,8 @@ fn the_transport_survives_a_split() {
         100,
         crate::config::CoreSortMode::default(),
         crate::db::valuation::ValuationMode::default(),
+        false,
+        crate::config::schema::default_fill_sound(),
         8,
         TelegramConfig::default(),
     );
@@ -688,6 +702,8 @@ id = 2981",
         Language::default(),
         MarketDataMode::default(),
         true,
+        // FORK: the detect auto-open opt-in sits between the split toggle and the stack pair.
+        false,
         false,
         false,
         360,
@@ -701,6 +717,8 @@ id = 2981",
         100,
         crate::config::CoreSortMode::default(),
         crate::db::valuation::ValuationMode::default(),
+        false,
+        crate::config::schema::default_fill_sound(),
         8,
         TelegramConfig::default(),
     );
@@ -715,6 +733,8 @@ id = 2981",
         text.contains("strategy = \"Beta\""),
         "the selection must persist by name, got: {text}"
     );
+}
+
 /// `charts_auto_activate` flows file → merge → runtime, and an old settings.toml without the
 /// field reads as OFF: silently upgrading everyone to tab-stealing charts would be hostile.
 #[test]
@@ -754,6 +774,7 @@ fn the_total_mode_survives_a_split_and_reload() {
             Language::default(),
             MarketDataMode::default(),
             true,
+            false, // FORK: charts_auto_activate
             false,
             false,
             360,
@@ -767,6 +788,8 @@ fn the_total_mode_survives_a_split_and_reload() {
             100,
             crate::config::CoreSortMode::default(),
             crate::db::valuation::ValuationMode::default(),
+            false, // FORK: fill_sound_on
+            crate::config::schema::default_fill_sound(),
             8,
             TelegramConfig::default(),
         );

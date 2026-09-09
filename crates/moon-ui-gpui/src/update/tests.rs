@@ -159,8 +159,10 @@ fn same_installed_target_accepts_a_renamed_install_name() {
 /// executable.
 #[test]
 fn same_installed_target_rejects_a_target_outside_the_derived_install_root() {
-    let canonical = std::path::Path::new(r"C:\install\MoonTerminal.exe");
-    let outside = std::path::Path::new(r"C:\other\MoonTerminal.exe");
+    // FORK: forward slashes, which BOTH platforms split on — backslash literals parse as one
+    // component on Linux, where this suite also runs, making both parents "" and equal.
+    let canonical = std::path::Path::new("/install/MoonTerminal.exe");
+    let outside = std::path::Path::new("/other/MoonTerminal.exe");
 
     assert!(!same_installed_target(outside, canonical));
 }
