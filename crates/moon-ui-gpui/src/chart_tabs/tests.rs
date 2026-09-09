@@ -2,8 +2,8 @@
 
 // NOT `use super::*`: the parent imports `gpui::*`, whose `test` macro shadows `#[test]`.
 use super::{
-    coin_search_bucket, preferred_auto_workspace_market, prune_coin_selection_to_scope,
-    windows::chart_detach_allowed, AutoWorkspaceChartState, Tab,
+    AutoWorkspaceChartState, Tab, coin_search_bucket, preferred_auto_workspace_market,
+    prune_coin_selection_to_scope, windows::chart_detach_allowed,
 };
 use moon_core::config::{ChartBucket, WorkspaceMode};
 use moon_core::market::MarketLabel;

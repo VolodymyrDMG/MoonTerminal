@@ -51,8 +51,6 @@ mod text;
 /// The caption editor formats its sample line with the chart's OWN formatter, never a second
 /// spelling of it.
 pub(crate) use text::preview_row;
-#[cfg(test)]
-mod tests;
 pub mod types;
 #[cfg(windows)]
 pub mod userdata;

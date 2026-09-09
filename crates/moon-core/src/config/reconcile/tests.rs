@@ -440,6 +440,8 @@ fn the_transport_survives_a_split() {
         100,
         crate::config::CoreSortMode::default(),
         crate::db::valuation::ValuationMode::default(),
+        false,
+        crate::config::schema::default_fill_sound(),
         8,
     );
 
@@ -489,6 +491,8 @@ id = 2981",
         Language::default(),
         MarketDataMode::default(),
         true,
+        // FORK: the detect auto-open opt-in sits between the split toggle and the stack pair.
+        false,
         false,
         false,
         360,
@@ -502,6 +506,8 @@ id = 2981",
         100,
         crate::config::CoreSortMode::default(),
         crate::db::valuation::ValuationMode::default(),
+        false,
+        crate::config::schema::default_fill_sound(),
         8,
     );
 
@@ -515,6 +521,8 @@ id = 2981",
         text.contains("strategy = \"Beta\""),
         "the selection must persist by name, got: {text}"
     );
+}
+
 /// `charts_auto_activate` flows file → merge → runtime, and an old settings.toml without the
 /// field reads as OFF: silently upgrading everyone to tab-stealing charts would be hostile.
 #[test]

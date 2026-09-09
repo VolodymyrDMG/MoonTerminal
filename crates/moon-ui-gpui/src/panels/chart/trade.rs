@@ -376,7 +376,8 @@ impl ChartPanel {
             // The approximate strip first, then the PAINTED book (#62): in book-only mode the
             // painter's full-width book is wider than the strip formula, and a click the deciding
             // gate accepted must not be refused here by the narrower reading of the same zone.
-            self.glass_pane_at(pos).or_else(|| self.book_click_pane_at(pos))
+            self.glass_pane_at(pos)
+                .or_else(|| self.book_click_pane_at(pos))
         } else {
             self.input.pane_at(pos.0, pos.1)
         };

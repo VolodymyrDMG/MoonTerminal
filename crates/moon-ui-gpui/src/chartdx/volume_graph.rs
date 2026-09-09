@@ -213,8 +213,8 @@ pub fn resample_if_stale(
     // Bucket boundaries anchor to ABSOLUTE Unix time so every rebuild lands trades in the same
     // half second; the covered range snaps outward to whole buckets.
     let abs_lo = (((epoch_ms + f64::from(view_time0 - margin_ms)) / BUCKET_MS).floor()) * BUCKET_MS;
-    let abs_hi =
-        (((epoch_ms + f64::from(view_time0 + window_ms + margin_ms)) / BUCKET_MS).ceil()) * BUCKET_MS;
+    let abs_hi = (((epoch_ms + f64::from(view_time0 + window_ms + margin_ms)) / BUCKET_MS).ceil())
+        * BUCKET_MS;
     let t_lo = (abs_lo - epoch_ms) as f32;
     let t_hi = (abs_hi - epoch_ms) as f32;
     *key = Some(ColumnsKey {

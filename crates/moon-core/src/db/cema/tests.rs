@@ -8,8 +8,7 @@ use super::*;
 
 /// The bot's own line shapes, verbatim from a user's log (addresses already redacted upstream).
 const VELVET_MSG: &str = "23:39:35  VELVET: [0] (48923) EMAFilter: Min(12hours, 1sec) = 1.64%  Min(5hours, 1sec) = 1.64%  Min(45min, 1sec) = -0.23%  BTC(30sec, 1sec) = 0.03%  ";
-const EPIC_MSG: &str =
-    "00:00:58.558  EPIC: [0] (177) EMAFilter: Min(5hours, 1sec) = -1.25%  Min(45min, 1sec) = -0.13%  BTC(30sec, 1sec) = 0.00%  ";
+const EPIC_MSG: &str = "00:00:58.558  EPIC: [0] (177) EMAFilter: Min(5hours, 1sec) = -1.25%  Min(45min, 1sec) = -0.13%  BTC(30sec, 1sec) = 0.00%  ";
 
 #[test]
 fn parses_the_bots_own_lines() {
@@ -26,7 +25,10 @@ fn parses_the_bots_own_lines() {
     );
     let (task, vals) = parse_emafilter(EPIC_MSG).expect("EPIC line parses");
     assert_eq!(task, 177);
-    assert_eq!(vals, vec![("min5h", -1.25), ("min45m", -0.13), ("btc30s", 0.0)]);
+    assert_eq!(
+        vals,
+        vec![("min5h", -1.25), ("min45m", -0.13), ("btc30s", 0.0)]
+    );
 }
 
 /// The task id is the LAST parenthesized number before the marker: the line may carry other
@@ -54,7 +56,8 @@ fn unknown_functions_and_windows_are_skipped() {
 #[test]
 fn malformed_values_are_ignored() {
     for tail in ["= %", "= abc%", "= 1.0", "", "(unclosed"] {
-        let msg = format!("C: [0] (9) EMAFilter: Min(45min, 1sec) = 0.50%  BTC(30sec, 1sec) {tail}");
+        let msg =
+            format!("C: [0] (9) EMAFilter: Min(45min, 1sec) = 0.50%  BTC(30sec, 1sec) {tail}");
         assert_eq!(
             parse_emafilter(&msg),
             Some((9, vec![("min45m", 0.5)])),
@@ -78,7 +81,10 @@ fn file_lines_split_on_the_dated_writer_columns() {
     assert_eq!(ms, ((0 * 60) + 0) * 60_000 + 58_778);
     assert_eq!(msg, EPIC_MSG);
     assert!(split_file_line("not a log line").is_none());
-    assert!(split_file_line("25:00:00.000\tINFO\t\tx").is_none(), "impossible clock");
+    assert!(
+        split_file_line("25:00:00.000\tINFO\t\tx").is_none(),
+        "impossible clock"
+    );
 }
 
 /// The civil-date conversions agree with the epoch and invert each other across leap years.
@@ -124,20 +130,27 @@ fn scan_consumes_matched_lines_and_stalls_on_a_young_unmatched_one() {
     let deals: HashSet<i64> = [10, 12].into_iter().collect();
     // now = within the grace of every line: the unmatched task 11 is too young to drop.
     let take = scan_file(&path, 0, 7, 0, &deals, 60_000).expect("scan");
-    assert_eq!(take.rows.len(), 1, "only the line BEFORE the stall is taken");
+    assert_eq!(
+        take.rows.len(),
+        1,
+        "only the line BEFORE the stall is taken"
+    );
     assert_eq!(
         (take.rows[0].taskid, take.rows[0].key, take.rows[0].v),
         (10, "btc30s", 0.10)
     );
-    assert_eq!(take.rows[0].ts, 1_000, "file date plus the line's own clock");
+    assert_eq!(
+        take.rows[0].ts, 1_000,
+        "file date plus the line's own clock"
+    );
     assert_eq!(
         take.next_off,
         (l1.len() + 1) as u64,
         "the offset must stop BEFORE the undecided line"
     );
     // The same file once the grace expired: task 11 is dropped, task 12 harvested.
-    let take = scan_file(&path, take.next_off, 7, 0, &deals, MATCH_GRACE_MS + 4_000)
-        .expect("second scan");
+    let take =
+        scan_file(&path, take.next_off, 7, 0, &deals, MATCH_GRACE_MS + 4_000).expect("second scan");
     assert_eq!(take.rows.len(), 1);
     assert_eq!(take.rows[0].taskid, 12);
     assert_eq!(take.next_off, (l1.len() + l2.len() + l3.len() + 3) as u64);
@@ -285,7 +298,12 @@ fn comment_chunks_harvest_deals_and_advance_the_mark() {
     ins(7, 10, "x Min(45min, 1sec) = 0.50% y", now_secs - 1);
     ins(7, 11, "no expressions here", now_secs - 1);
     // Older than the value retention: skipped, but the mark must still pass it.
-    ins(7, 12, "x Min(45min, 1sec) = 9.99% y", now_secs - (VALS_KEEP_DAYS + 5) * 86_400);
+    ins(
+        7,
+        12,
+        "x Min(45min, 1sec) = 9.99% y",
+        now_secs - (VALS_KEEP_DAYS + 5) * 86_400,
+    );
     ins(8, 13, "x BTC(30sec, 1sec) = 0.10% y", now_secs - 2);
 
     let (rows, mark, full) = comment_chunk(&conn, 0, now).expect("chunk");
@@ -312,7 +330,10 @@ fn comment_chunks_harvest_deals_and_advance_the_mark() {
     ins(7, 14, "x Min(5hours, 1sec) = -1.25% y", now_secs);
     let (rows, mark, _) = comment_chunk(&conn, mark, now).expect("tail");
     assert_eq!(rows.len(), 1);
-    assert_eq!((rows[0].taskid, rows[0].key, rows[0].v), (14, "min5h", -1.25));
+    assert_eq!(
+        (rows[0].taskid, rows[0].key, rows[0].v),
+        (14, "min5h", -1.25)
+    );
     assert_eq!(mark, 5);
 }
 

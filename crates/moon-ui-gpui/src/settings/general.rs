@@ -395,7 +395,11 @@ impl SettingsView {
                 .label(t!("general.charts_auto_activate").to_string())
                 .size(MoonCheckboxSize::Normal),
             )
-            .child(hint(&t!("general.charts_auto_activate_hint")))
+            .child(settings_hint(
+                "general.charts_auto_activate_hint",
+                &t!("general.charts_auto_activate_hint"),
+                muted,
+            ))
             .child(super::separator(p, cx))
             // Restrict order and line controls to the order-book control zone.
             .child(
@@ -487,7 +491,11 @@ impl SettingsView {
                     )
                     .child(self.fill_sound_dropdown(&fill_sound, cx)),
             )
-            .child(hint(&t!("general.fill_sound_hint")))
+            .child(settings_hint(
+                "general.fill_sound_hint",
+                &t!("general.fill_sound_hint"),
+                muted,
+            ))
             .child(super::separator(p, cx))
             // Stack layout is now configured per tab from the chart-tabs layout popup.
             // File logging and retention period.

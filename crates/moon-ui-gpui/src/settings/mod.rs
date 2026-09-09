@@ -617,6 +617,8 @@ fn settings_sig(b: &Backend) -> u64 {
     cfg.charts_stack_scroll.hash(&mut h);
     cfg.charts_stack_compress.hash(&mut h);
     cfg.chart_stack_height.hash(&mut h);
+    cfg.fill_sound_on.hash(&mut h);
+    cfg.fill_sound.hash(&mut h);
     cfg.log_to_file.hash(&mut h);
     cfg.log_retention_days.hash(&mut h);
     cfg.ui_font_delta.to_bits().hash(&mut h);
@@ -813,6 +815,11 @@ fn draft_sig(cfg: &AppConfig) -> u64 {
     cfg.report_valuation_mode.hash(&mut h);
     cfg.ui_theme_mode.hash(&mut h);
     cfg.charts_split_by_core.hash(&mut h);
+    // FORK: the detect auto-open opt-in and the fill sound are edited on the same tab, so an
+    // unsaved change to either must read as a dirty draft like its neighbours.
+    cfg.charts_auto_activate.hash(&mut h);
+    cfg.fill_sound_on.hash(&mut h);
+    cfg.fill_sound.hash(&mut h);
     cfg.charts_stack_scroll.hash(&mut h);
     cfg.charts_stack_compress.hash(&mut h);
     cfg.chart_stack_height.hash(&mut h);

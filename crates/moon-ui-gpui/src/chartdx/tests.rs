@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 //! Unit tests for the pane layout every chart surface shares.
 
 use super::*;
@@ -166,7 +165,8 @@ fn an_unpresented_slot_stays_finite() {
             "book starts off the pane for broom={broom}"
         );
     }
-=======
+}
+
 use super::book_zone_below_captions;
 
 /// The gate's whole promise (#62): the clickable strip IS the painted book, translated into the
@@ -206,8 +206,7 @@ fn an_unpainted_book_yields_no_zone() {
 /// With no captions drawn over the book, the whole painted strip trades.
 #[test]
 fn no_captions_leaves_the_whole_strip() {
-    let zone =
-        book_zone_below_captions([400.0, 0.0, 220.0, 800.0], [0.0, 0.0], None, 1.0).unwrap();
+    let zone = book_zone_below_captions([400.0, 0.0, 220.0, 800.0], [0.0, 0.0], None, 1.0).unwrap();
     assert_eq!((zone.y, zone.h), (0.0, 800.0));
 }
 
@@ -225,9 +224,7 @@ fn captions_covering_the_book_leave_no_zone() {
 /// the max() with the book's own top is what pins it.
 #[test]
 fn a_caption_above_the_book_does_not_grow_the_zone() {
-    let zone =
-        book_zone_below_captions([400.0, 200.0, 220.0, 400.0], [0.0, 0.0], Some(50.0), 1.0)
-            .unwrap();
+    let zone = book_zone_below_captions([400.0, 200.0, 220.0, 400.0], [0.0, 0.0], Some(50.0), 1.0)
+        .unwrap();
     assert_eq!((zone.y, zone.h), (200.0, 400.0));
->>>>>>> 6237a6de (feat(chart): double-click orders fire only in the painted book, below the coin caption (#62))
 }

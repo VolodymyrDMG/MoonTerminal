@@ -173,6 +173,8 @@ fn the_ui_check_agrees_with_the_conversion_on_both_branches() {
     // A string field takes anything, and so does a type name this build does not know.
     assert!(field_text_is_valid("String", "anything at all"));
     assert!(field_text_is_valid("Unknown", ""));
+}
+
 /// A snapshot with the given fields and no schema, the common live-feed shape for strategies
 /// whose values differ from their schema defaults (the server only transmits those).
 fn snap(fields: &[(&str, FieldValue)]) -> StrategySnapshot {

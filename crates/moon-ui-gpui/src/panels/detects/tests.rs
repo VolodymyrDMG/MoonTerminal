@@ -38,10 +38,6 @@ fn presentation_scope_keeps_hidden_detection_cards_retained() {
             .iter()
             .all(|core| detection_core_visible(Some(*core), &[11, 22]))
     );
-    assert!(retained
-        .iter()
-        .all(|core| detection_core_visible(*core, &[11, 22])));
-
     let src = include_str!("mod.rs");
     let ingest = ingest_body();
     assert!(ingest.contains(".filter(|s| s.group == self.group)"));
@@ -435,6 +431,8 @@ fn a_price_move_is_drawn_only_when_there_is_one() {
             "{field:?} was gated on price history"
         );
     }
+}
+
 /// The gear popup's tick window trims the frozen rows to a SUFFIX: an exact `-window` boundary
 /// stays in, older rows drop out, and the window delta and volume measure the trimmed slice — so
 /// 1/3/5 answer "what happened in the last N seconds", not "since the snapshot began".

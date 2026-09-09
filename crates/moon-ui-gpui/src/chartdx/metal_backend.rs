@@ -1160,7 +1160,11 @@ impl MetalLayers {
         view.volume_sell_inv = 1.0 / self.volume_sell_max.max(1e-6);
         // Band height from the volume-view config; `0` tells the volume shader to draw nothing.
         let band_h = if self.vol_enabled {
-            super::volume_graph::band_height_px(view.bounds[3], self.vol_band_frac, self.vol_band_cap)
+            super::volume_graph::band_height_px(
+                view.bounds[3],
+                self.vol_band_frac,
+                self.vol_band_cap,
+            )
         } else {
             0.0
         };
@@ -1187,7 +1191,12 @@ impl MetalLayers {
                 m: band_m,
             },
             ReadoutRect {
-                dst: [view.bounds[0], band_y, view.bounds[2], if band_h > 0.0 { 1.0 } else { 0.0 }],
+                dst: [
+                    view.bounds[0],
+                    band_y,
+                    view.bounds[2],
+                    if band_h > 0.0 { 1.0 } else { 0.0 },
+                ],
                 bg: super::volume_graph::BAND_EDGE_RGBA,
                 border: [0.0; 4],
                 m: band_m,
@@ -1296,7 +1305,11 @@ impl MetalLayers {
         view.volume_buy_inv = 1.0 / self.volume_buy_max.max(1e-6);
         view.volume_sell_inv = 1.0 / self.volume_sell_max.max(1e-6);
         let band_h = if self.vol_enabled {
-            super::volume_graph::band_height_px(view.bounds[3], self.vol_band_frac, self.vol_band_cap)
+            super::volume_graph::band_height_px(
+                view.bounds[3],
+                self.vol_band_frac,
+                self.vol_band_cap,
+            )
         } else {
             0.0
         };

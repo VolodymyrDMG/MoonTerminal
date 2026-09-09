@@ -237,7 +237,9 @@ impl RenderState {
                         let price_at = |t: f32| {
                             let target = epoch + f64::from(t);
                             let i = pts.partition_point(|p| p.time_ms < target);
-                            pts.get(i.saturating_sub(1)).or_else(|| pts.first()).map(|p| p.price)
+                            pts.get(i.saturating_sub(1))
+                                .or_else(|| pts.first())
+                                .map(|p| p.price)
                         };
                         match (price_at(lo), price_at(hi)) {
                             (Some(p0), Some(p1)) if p0 > 0.0 => {

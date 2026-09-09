@@ -18,8 +18,8 @@ fn tick(time_ms: f64, price: f32, qty: f32, side: Side) -> Tick {
 fn half_second_buckets_sum_each_side_into_a_pair() {
     let mut tape = VolumeTape::default();
     tape.ingest(&[
-        tick(10_050.0, 2.0, 3.0, Side::Buy),  // 6$   ┐ same 10.0–10.5s bucket
-        tick(10_400.0, 2.0, 1.0, Side::Buy),  // 2$   ┘
+        tick(10_050.0, 2.0, 3.0, Side::Buy), // 6$   ┐ same 10.0–10.5s bucket
+        tick(10_400.0, 2.0, 1.0, Side::Buy), // 2$   ┘
         tick(10_450.0, 2.0, 5.0, Side::Sell), // 10$  same bucket, sell side
         tick(10_600.0, 2.0, 4.0, Side::Sell), // 8$   NEXT bucket
     ]);
@@ -79,7 +79,10 @@ fn maxima_ignore_margin_buckets() {
     let update = resample_if_stale(&mut tape, &mut key, 0.0, 0.0, 0.1, 1_600.0)
         .expect("first resample always runs");
     assert_eq!(update.buy_max, 4.0, "margin bucket must not set the scale");
-    assert!(update.columns.iter().any(|c| c.qty == 900.0), "yet it is still drawn");
+    assert!(
+        update.columns.iter().any(|c| c.qty == 900.0),
+        "yet it is still drawn"
+    );
 }
 
 /// `sum_window` answers the measure overlay: per-side quote sums over a half-open range.
@@ -92,7 +95,11 @@ fn sum_window_splits_sides_over_the_requested_range() {
         tick(10_000.0, 2.0, 100.0, Side::Buy), // outside
     ]);
     assert_eq!(tape.sum_window(0.0, 3_000.0), (6.0, 10.0));
-    assert_eq!(tape.sum_window(2_000.0, 3_000.0), (0.0, 10.0), "boundary trade stays in");
+    assert_eq!(
+        tape.sum_window(2_000.0, 3_000.0),
+        (0.0, 10.0),
+        "boundary trade stays in"
+    );
     assert_eq!(tape.sum_window(0.0, f64::INFINITY), (206.0, 10.0));
 }
 

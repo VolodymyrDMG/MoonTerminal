@@ -16,14 +16,14 @@ use moon_ui::{
 use rust_i18n::t;
 
 use moon_core::config::{
-    detect_slot_count, DetectChart, DetectField, DetectViewCfg, DETECT_SIZE_LARGE,
-    DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI,
+    DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart, DetectField,
+    DetectViewCfg, detect_slot_count,
 };
 
-use super::{cards, DetectsPanel};
+use super::{DetectsPanel, cards};
 use crate::design;
 use crate::panels::{
-    popup_close_button, popup_group, popup_title, radio_items, RadioMark, POPUP_GROUP_INSET,
+    POPUP_GROUP_INSET, RadioMark, popup_close_button, popup_group, popup_title, radio_items,
 };
 
 /// Popup width in logical pixels: three large-slot columns (76-pixel dropdown plus three 20-pixel
@@ -517,7 +517,6 @@ fn content(
         )
         .child(win_seg);
 
-
     // Server rail: swatch caption plus width and gradient sliders.
     let rail_caption = h_flex()
         .items_center()
@@ -619,7 +618,7 @@ fn content(
                     .gap(design::ui_px(cx, 6.0))
                     .child(w_row)
                     .child(h_row)
-                    .child(chart_row)
+                    .child(chart_row),
             ),
         )
         .child(

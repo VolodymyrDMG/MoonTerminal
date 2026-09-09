@@ -52,8 +52,8 @@ use moon_ui::{
 };
 use rust_i18n::t;
 
-use crate::persistence::chart_persist;
 use crate::Backend;
+use crate::persistence::chart_persist;
 use moon_core::config::{ChartBucket, ChartTheme, WorkspaceMode};
 use moon_core::market::MarketLabel;
 use moon_core::session::CoreId;
