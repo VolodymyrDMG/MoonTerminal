@@ -63,7 +63,15 @@ fn detect_view_partial_toml_fills_defaults() {
 #[test]
 fn detect_view_ticks_window_clamps() {
     let mut cfg = DetectViewCfg::default();
-    for (raw, want) in [(0u8, 5u32), (1, 1), (3, 3), (5, 5), (15, 5), (30, 5), (200, 5)] {
+    for (raw, want) in [
+        (0u8, 5u32),
+        (1, 1),
+        (3, 3),
+        (5, 5),
+        (15, 5),
+        (30, 5),
+        (200, 5),
+    ] {
         cfg.ticks_window_secs = raw;
         assert_eq!(cfg.ticks_window_secs_clamped(), want, "raw {raw}");
     }

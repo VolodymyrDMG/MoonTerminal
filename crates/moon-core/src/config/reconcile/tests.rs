@@ -93,6 +93,7 @@ fn retired_keys_leave_the_persistence_pipeline_quietly() {
         merged.language,
         merged.market_mode,
         merged.charts_split_by_core,
+        merged.charts_auto_activate,
         merged.charts_stack_scroll,
         merged.charts_stack_compress,
         merged.chart_stack_height,
@@ -105,6 +106,8 @@ fn retired_keys_leave_the_persistence_pipeline_quietly() {
         merged.chart_memory_percent,
         merged.core_sort,
         merged.report_valuation_mode,
+        merged.fill_sound_on,
+        merged.fill_sound,
         merged.next_uid.get(),
         merged.telegram,
     );
@@ -480,6 +483,8 @@ fn the_transport_survives_a_split() {
         100,
         crate::config::CoreSortMode::default(),
         crate::db::valuation::ValuationMode::default(),
+        false,
+        crate::config::schema::default_fill_sound(),
         8,
         TelegramConfig::default(),
     );
@@ -530,6 +535,8 @@ id = 2981",
         Language::default(),
         MarketDataMode::default(),
         true,
+        // FORK: the detect auto-open opt-in sits between the split toggle and the stack pair.
+        false,
         false,
         false,
         360,
@@ -542,6 +549,8 @@ id = 2981",
         100,
         crate::config::CoreSortMode::default(),
         crate::db::valuation::ValuationMode::default(),
+        false,
+        crate::config::schema::default_fill_sound(),
         8,
         TelegramConfig::default(),
     );
@@ -556,6 +565,8 @@ id = 2981",
         text.contains("strategy = \"Beta\""),
         "the selection must persist by name, got: {text}"
     );
+}
+
 /// `charts_auto_activate` flows file → merge → runtime, and an old settings.toml without the
 /// field reads as OFF: silently upgrading everyone to tab-stealing charts would be hostile.
 #[test]

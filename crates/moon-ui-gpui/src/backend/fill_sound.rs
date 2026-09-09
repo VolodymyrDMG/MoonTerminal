@@ -115,7 +115,14 @@ mod tests {
     /// sound that silently stops firing.
     #[test]
     fn phase_classes_cover_the_lifecycle_in_order() {
-        let order = ["None", "BuySet", "BuyDone", "SellSet", "SellAlmostDone", "SellDone"];
+        let order = [
+            "None",
+            "BuySet",
+            "BuyDone",
+            "SellSet",
+            "SellAlmostDone",
+            "SellDone",
+        ];
         let classes: Vec<u8> = order.iter().map(|s| phase_class(s)).collect();
         assert_eq!(classes, [1, 1, 2, 3, 4, 5]);
         assert_eq!(phase_class("Cancelled"), 0, "unknown spellings are 'other'");
