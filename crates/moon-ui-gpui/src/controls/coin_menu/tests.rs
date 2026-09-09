@@ -173,3 +173,57 @@ fn shared_menu_navigation_revalidates_captured_workspace_scope() {
         .expect("strategy navigation must exist");
     assert!(goto.contains("workspace_group.clone(),"));
 }
+
+/// FORK: removal is the exact inverse of the membership test — same literal case-insensitive
+/// match — and touches nothing but the removed token.
+///
+/// Plausible breakage: a remove that re-joins with normalized spacing or reordered entries would
+/// rewrite the user's hand-curated list as a side effect; one that folds differently from
+/// `blacklist_contains` would show ✓ and then remove nothing, which is the exact complaint the
+/// toggle exists to close.
+#[test]
+fn remove_drops_exactly_the_asked_token() {
+    use super::blacklist_remove;
+
+    assert_eq!(blacklist_remove("BTC,ADA,ETH", "ADA"), "BTC,ETH");
+    assert_eq!(blacklist_remove("ADA", "ada"), "");
+    assert_eq!(blacklist_remove("BTC, ada , ETH", "ADA"), "BTC,ETH");
+    assert_eq!(blacklist_remove("BTC,ETH", "ADA"), "BTC,ETH");
+    assert_eq!(blacklist_remove("", "ADA"), "");
+    // Leading/trailing separators collapse rather than survive as empty entries.
+    assert_eq!(blacklist_remove("ADA,BTC,", "ADA"), "BTC");
+}
+
+/// FORK: add and remove round-trip through the same membership test, so a toggle driven by that
+/// test converges instead of oscillating on spelling differences.
+#[test]
+fn toggle_round_trip_converges() {
+    use super::{blacklist_add, blacklist_contains, blacklist_remove};
+
+    let with = blacklist_add("BTC,ETH", "1kBONKPERP");
+    assert!(blacklist_contains(&with, "1kbonkperp"));
+    let without = blacklist_remove(&with, "1kBONKPERP");
+    assert_eq!(without, "BTC,ETH");
+    assert!(!blacklist_contains(&without, "1kBONKPERP"));
+}
+
+/// FORK: the toggle drives every target to ONE state decided across all of them — completing a
+/// half-listed set first, unlisting only from a fully listed one. The rule lives in
+/// `core_blacklist_writer`; this pins its source so a per-core flip cannot sneak back.
+#[test]
+fn the_toggle_decides_one_state_across_all_targets() {
+    let source = include_str!("blacklist.rs");
+    let writer = source
+        .split("fn core_blacklist_writer(")
+        .nth(1)
+        .expect("the shared core writer must exist");
+    let decision = writer
+        .split("let all_in")
+        .nth(1)
+        .expect("the writer decides all_in before writing");
+    assert!(
+        decision.contains("remove_from_core_blacklist")
+            && decision.contains("add_to_core_blacklist"),
+        "both directions must branch off the one all_in decision"
+    );
+}

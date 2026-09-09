@@ -485,6 +485,53 @@ fn blacklist_add(text: &str, coin: &str) -> String {
     }
 }
 
+/// FORK: drops a token from a comma-separated list, by the same literal case-insensitive match
+/// [`blacklist_contains`] answers with — the two must agree, or a row could show ✓ and then
+/// remove nothing.
+///
+/// Every OTHER entry is kept in its own spelling and order: the list is the user's hand-curated
+/// text, and a removal that also "tidied" it would be an edit nobody asked for. Only the removed
+/// token's separators collapse.
+fn blacklist_remove(text: &str, coin: &str) -> String {
+    text.split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty() && !entry.eq_ignore_ascii_case(coin))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// FORK: removes a token from the core-wide blacklist, keeping the enable flag AS IT STANDS.
+///
+/// The flag is the user's own switch, independent of the list's content — MoonBot keeps the
+/// checkbox and the text as two controls — so unlisting the last coin must not silently disarm
+/// a blacklist the user left switched on.
+fn remove_from_core_blacklist(b: &Backend, core: CoreId, coin: &str) {
+    let (on, text) = core_blacklist(b, core);
+    let new = blacklist_remove(&text, coin);
+    if let Err(err) = b.session.set_blacklist(core, on, new) {
+        log::warn!(
+            "coin_menu: remove {coin} from core {} blacklist failed: {err:#}",
+            moon_core::feed::core_label(core)
+        );
+    }
+}
+
+/// FORK: removes a token from the strategy's `CoinsBlackList` through the shared field editor,
+/// watched for its outcome exactly like the addition beside it.
+fn remove_from_strategy_blacklist(b: &mut Backend, core: CoreId, sid: u64, coin: &str) {
+    let cur = strategy_blacklist(b, core, sid);
+    let new = blacklist_remove(&cur, coin);
+    let edits = vec![(sid, vec![(FIELD_COINS_BLACK_LIST.to_string(), new)])];
+    match b.session.edit_strategies(core, edits) {
+        Ok(()) => b.watch_strategy_edit(core, sid, coin.to_string()),
+        Err(err) => {
+            log::warn!(
+                "coin_menu: remove {coin} from strategy {sid}@{core} blacklist failed: {err:#}"
+            );
+        }
+    }
+}
+
 mod blacklist;
 
 use blacklist::{permanent_blacklist_item, temp_blacklist_item};
