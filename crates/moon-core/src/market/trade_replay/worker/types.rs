@@ -145,6 +145,10 @@ pub(crate) struct TickStage {
     pub(super) key: OutcomeKey,
     /// The exchange klines to carry forward as the bar layer of the eventual tick series.
     pub(super) candles: Vec<ChartCandle>,
+    /// FORK (#67): the mark-price track to carry forward, on the same terms as [`Self::candles`]:
+    /// fetched by the candle stage that ran first, and carried here so the tick outcome keeps the
+    /// line whatever the outcome ring evicted in between.
+    pub(super) mark: Vec<crate::feed::types::PricePoint>,
 }
 
 /// One unit of the coordinator's internal priority queue — everything that is not a venue call.
@@ -503,6 +507,13 @@ pub struct TradeReplayRequest {
     /// the core's archive, and whether the remembered-answer ring is read or written — see
     /// [`ReplayIntent`].
     pub intent: ReplayIntent,
+    /// FORK (#67): the replayed position's own average entry price, drawn as a level line, or
+    /// `None` when the requester has none worth drawing.
+    ///
+    /// Request data on the same terms as `identity`: it belongs to the WINDOW that asked, never
+    /// to the fetched rows, and every path that answers from a cache re-stamps it from the live
+    /// request — see [`TradeReplaySeries::avg_price`].
+    pub avg_price: Option<f32>,
     /// Set by the requester when its window closes; checked between pages.
     pub cancel: Arc<AtomicBool>,
     /// Where the answer goes. A dead receiver is normal and is not an error.

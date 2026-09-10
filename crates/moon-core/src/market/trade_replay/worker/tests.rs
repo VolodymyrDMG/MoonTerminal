@@ -176,7 +176,7 @@ fn cached_retry_keeps_wider_tick_coverage() {
             ticks_settled: false,
         },
     );
-    let Some(Remembered::Ready { mut series, .. }) = remember_lookup(&cache, &key, 42) else {
+    let Some(Remembered::Ready { mut series, .. }) = remember_lookup(&cache, &key, 42, None) else {
         panic!("retry cache missing")
     };
     let stage = stage_and_stamp(series.venue, &key, &mut series);
@@ -202,7 +202,7 @@ fn cached_retry_keeps_wider_tick_coverage() {
     );
     let Some(Remembered::Ready {
         series: reopened, ..
-    }) = remember_lookup(&cache, &key, 43)
+    }) = remember_lookup(&cache, &key, 43, None)
     else {
         panic!("settled cache missing")
     };
@@ -232,6 +232,8 @@ fn core_series(partial: bool) -> TradeReplaySeries {
         side_slots: Vec::new(),
         thinning: TickThinning::Raw,
         partial,
+        mark: Vec::new(),
+        avg_price: None,
         covered: Coverage::one(if partial {
             (60_000, 120_000)
         } else {
@@ -307,6 +309,7 @@ fn core_replay_rechecks_after_candles_and_keeps_context() {
             long_position_ms: bars.window.long_position_ms,
         },
         candles: bars.candles.clone(),
+        mark: Vec::new(),
     };
     let served = core_first(
         || {
@@ -723,6 +726,7 @@ fn tile_request(reply: Sender<TradeReplayOutcome>) -> TradeReplayRequest {
         tick_value: super::super::venue_caps::TickValue::Base,
         ticks: true,
         intent: ReplayIntent::Chart,
+        avg_price: None,
         cancel: Arc::new(AtomicBool::new(false)),
         reply,
     }
@@ -744,6 +748,7 @@ fn tile_stage(request: &TradeReplayRequest) -> TickStage {
             long_position_ms: request.window.long_position_ms,
         },
         candles: Vec::new(),
+        mark: Vec::new(),
     }
 }
 
@@ -872,7 +877,7 @@ fn tile_stage_for_archive(request: &TradeReplayRequest) -> TickStage {
         margin_ms: request.window.margin_ms,
         long_position_ms: request.window.long_position_ms,
     };
-    tick_stage_for(request.address.venue, &key, &[])
+    tick_stage_for(request.address.venue, &key, &[], &[])
 }
 
 /// Hydrating a cold tile store must spare an archive request when persisted tape is complete.
@@ -1053,7 +1058,7 @@ fn a_window_past_the_routes_retention_still_queues_its_tick_stage() {
     let mut request = tile_request(reply);
     request.address.venue = crate::venue::venue(4).expect("Binance futures");
     let key = tile_stage(&request).key;
-    let stage = tick_stage_for(request.address.venue, &key, &[]);
+    let stage = tick_stage_for(request.address.venue, &key, &[], &[]);
     assert_eq!(stage.route, Some(TradeRoute::BinanceUsdMAggTrades));
 }
 

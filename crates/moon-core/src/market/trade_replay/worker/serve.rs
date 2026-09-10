@@ -90,6 +90,8 @@ pub(super) fn attach_context(
     match context {
         TradeReplayOutcome::Ready(series) if !series.candles.is_empty() => {
             native.candles = series.candles.clone();
+            // FORK (#67): the mark track rides with the bars — the context stage fetched it.
+            native.mark = series.mark.clone();
         }
         _ => native.tick_status = TickStatus::ContextUnavailable,
     }
@@ -189,6 +191,9 @@ pub(super) fn read_core(request: &TradeReplayRequest) -> Option<TradeReplaySerie
         side_slots,
         native.covered != (request.window.from_ms, request.window.to_ms),
         Coverage::one(native.covered),
+        Vec::new(),
+        // FORK (#67): the core's archive holds no mark price; `attach_context` lends the candle
+        // stage's track exactly as it lends the bars.
         Vec::new(),
     );
     series.source = TradeReplaySource::CoreTicks;
@@ -297,7 +302,7 @@ pub(super) fn serve(
     // candle page per row on a delisted market is the price of never inheriting a chart's
     // budget-stopped walk — see `ReplayIntent::reuses_answers`.
     let remembered = match request.intent.reuses_answers() {
-        true => remember_lookup(cache, &key, request.identity),
+        true => remember_lookup(cache, &key, request.identity, request.avg_price),
         false => None,
     };
     match remembered {
@@ -333,7 +338,13 @@ pub(super) fn serve(
 
     // The SQLite cache is read first and unconditionally: it costs no request and is not gated.
     if let Some(rows) = read_cached_bars(request.address.cache.as_ref(), request) {
-        let mut series = compose(request, venue, rows);
+        // FORK (#67): the BARS still cost no request and are never gated — that property is
+        // what this branch exists for. The mark line rides best-effort on top:
+        // `fetch_mark_track` asks the gate itself and answers empty when refused, so a user in
+        // backoff still gets the cached chart instantly, just without the line until a later
+        // open.
+        let mark = fetch_mark_track(agent, gate, request, Instant::now() + JOB_DEADLINE);
+        let mut series = compose(request, venue, rows, mark);
         let tick_stage = stage_and_stamp(venue, &key, &mut series);
         // Never settled here: a stage is always queued (`tick_stage_for`), its `Pending` must be
         // re-decided — or answered — on the next open, and the stage's own answer is what is
@@ -505,7 +516,14 @@ pub(super) fn serve(
             tick_stage: None,
         };
     }
-    let mut series = compose(request, venue, rows);
+    // FORK (#67): the mark line is fetched AFTER the venue's own answer above proved it alive,
+    // and only for a window that still has a viewer: a cancelled run keeps its paid-for bars for
+    // the cache merge but spends nothing more.
+    let mark = match cancelled {
+        true => Vec::new(),
+        false => fetch_mark_track(agent, gate, request, deadline),
+    };
+    let mut series = compose(request, venue, rows, mark);
     // Only a COMPLETE run may be remembered. Pages are issued left to right, so a cancelled run
     // holds the window's left-hand prefix — typically missing exactly the bars around the exit —
     // and the in-memory ring, unlike the SQLite path, has no coverage re-check to catch that on
@@ -568,7 +586,7 @@ pub(super) fn stage_and_stamp(
     key: &OutcomeKey,
     series: &mut TradeReplaySeries,
 ) -> TickStage {
-    let mut stage = tick_stage_for(venue, key, &series.candles);
+    let mut stage = tick_stage_for(venue, key, &series.candles, &series.mark);
     if series.source.is_ticks() {
         stage.baseline = Some(series.clone());
         series.tick_status = TickStatus::Streaming;
@@ -595,6 +613,8 @@ pub(super) fn stage_and_stamp(
 ///     key: The ring key this stage would replace on success.
 ///     candles: The exchange klines just composed, carried forward as the eventual tick series'
 ///         bar layer — see [`TickStage::candles`].
+///     mark: FORK (#67): the mark-price track just composed, carried forward on the same terms
+///         — see [`TickStage::mark`].
 ///
 /// Returns:
 ///     The stage to queue.
@@ -602,6 +622,7 @@ pub(super) fn tick_stage_for(
     venue: crate::venue::Venue,
     key: &OutcomeKey,
     candles: &[ChartCandle],
+    mark: &[crate::feed::types::PricePoint],
 ) -> TickStage {
     TickStage {
         baseline: None,
@@ -609,7 +630,88 @@ pub(super) fn tick_stage_for(
         archive: venue_caps::archive_route(venue, &key.market),
         key: key.clone(),
         candles: candles.to_vec(),
+        mark: mark.to_vec(),
     }
+}
+
+/// FORK (#67): best-effort fetch of the venue's mark-price track across one request's window.
+///
+/// BEST EFFORT is the whole contract, and every arm below serves it: the mark line is context
+/// beside a picture that already exists, so nothing here may fail the replay or delay it past the
+/// job's own deadline. A refused permit, a venue failure, an expired deadline or a cancelled
+/// window each stop the walk and serve whatever was collected so far — possibly nothing — and the
+/// line is simply shorter or absent, never a Failed outcome.
+///
+/// Gate discipline mirrors the candle loop's own: a claim before every page (the candle loop's
+/// claim is already CLEARED by the time this runs, and a cache-served branch never claimed at all,
+/// so trusting it would send blind into an active refusal), weighted pacing per page under the
+/// sibling kline route's weight — the mark endpoint is priced like `klines` on the same host —
+/// the response notice absorbed after every answer, `clear` once the venue answered, and
+/// `refuse` only for a failure the venue itself gave.
+///
+/// Args:
+///     agent: Shared HTTP client.
+///     gate: Per-host pacing and backoff.
+///     request: The request whose window the track should cover.
+///     deadline: The owning job's own deadline; crossing it stops the walk.
+///
+/// Returns:
+///     Line points ascending in time, covering as much of the window as the walk reached; empty
+///     when the venue has no mark route or nothing could be fetched.
+fn fetch_mark_track(
+    agent: &ureq::Agent,
+    gate: &ReplayGate,
+    request: &TradeReplayRequest,
+    deadline: Instant,
+) -> Vec<crate::feed::types::PricePoint> {
+    let Some(route) = venue_caps::mark_route(request.address.venue) else {
+        return Vec::new();
+    };
+    let host = route.host();
+    let asked_at = Instant::now();
+    let mut out: Vec<crate::feed::types::PricePoint> = Vec::new();
+    let mut venue_refused = false;
+    for (from_ms, to_ms) in pages(request.window, BAR_MS, route.max_rows()) {
+        if request.cancel.load(Ordering::Relaxed) || Instant::now() >= deadline {
+            break;
+        }
+        if gate.claim(host, Instant::now()).is_err() {
+            return out;
+        }
+        gate.pace_weighted(host, super::gate::MIN_INTERVAL, route.request_weight());
+        match rest::fetch_mark_points(agent, route, &request.market, from_ms, to_ms) {
+            Ok(points) => {
+                out.extend(points);
+                let _ = absorb_notice(gate, host);
+            }
+            // The venue ANSWERED; neither a symbol it does not list nor a range it no longer
+            // holds will change on a later page. Unreachable in practice — the kline fetch for
+            // the same symbol on the same host already succeeded — but the classifier can say
+            // it, so it is handled.
+            Err(rest::FetchError::UnknownSymbol) | Err(rest::FetchError::OutOfRetention) => {
+                let _ = absorb_notice(gate, host);
+                break;
+            }
+            Err(rest::FetchError::Throttled { diagnostic, .. }) => {
+                let _ = absorb_notice(gate, host);
+                log::warn!("[x] trade-replay mark fetch {diagnostic} on {host}");
+                venue_refused = true;
+                break;
+            }
+            Err(rest::FetchError::Transient(diagnostic)) => {
+                log::warn!("[x] trade-replay mark fetch stopped on {host}: {diagnostic}");
+                if absorb_notice(gate, host) == NoticeEffect::None {
+                    gate.refuse(host, Instant::now());
+                }
+                venue_refused = true;
+                break;
+            }
+        }
+    }
+    if !venue_refused {
+        gate.clear(host, asked_at);
+    }
+    out
 }
 
 /// Whether a window is within a trade route's own documented retention.

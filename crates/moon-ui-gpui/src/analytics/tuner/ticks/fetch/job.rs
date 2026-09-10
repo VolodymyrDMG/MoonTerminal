@@ -1243,6 +1243,8 @@ fn serve_cluster(
         tick_value: first.tick_value,
         ticks: true,
         intent: ReplayIntent::Model,
+        // FORK (#67): a model's replay draws nothing, so it carries no entry level.
+        avg_price: None,
         cancel: cancel.clone(),
         reply,
     });

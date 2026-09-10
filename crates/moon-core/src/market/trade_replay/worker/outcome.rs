@@ -20,6 +20,8 @@ use super::*;
 ///         chart withholds the bars lying inside them, and only this coverage knows that a
 ///         covered minute with no trade in it is still covered.
 ///     candles: The exchange klines to carry as the bar layer.
+///     mark: FORK (#67): the mark-price track to carry, fetched by the candle stage — see
+///         `TickStage::mark`.
 ///
 /// Returns:
 ///     The series to hand the chart.
@@ -36,6 +38,7 @@ pub(super) fn compose_ticks(
     partial: bool,
     covered: Coverage,
     candles: Vec<ChartCandle>,
+    mark: Vec<crate::feed::types::PricePoint>,
 ) -> TradeReplaySeries {
     TradeReplaySeries {
         source: TradeReplaySource::Ticks,
@@ -50,6 +53,8 @@ pub(super) fn compose_ticks(
         partial,
         side_slots,
         covered,
+        mark,
+        avg_price: request.avg_price,
     }
 }
 
@@ -83,6 +88,8 @@ pub(crate) fn rows_for_cache(source: TradeReplaySource, rows: &[ChartCandle]) ->
 ///     request: The request being served.
 ///     venue: Venue the rows came from.
 ///     rows: Bars in ascending open time.
+///     mark: FORK (#67): the venue's mark-price track over the window, or empty where there is
+///         none.
 ///
 /// Returns:
 ///     The series to hand the chart.
@@ -90,6 +97,7 @@ pub(super) fn compose(
     request: &TradeReplayRequest,
     venue: crate::venue::Venue,
     rows: Vec<ChartCandle>,
+    mark: Vec<crate::feed::types::PricePoint>,
 ) -> TradeReplaySeries {
     TradeReplaySeries {
         source: TradeReplaySource::Klines1m,
@@ -105,6 +113,8 @@ pub(super) fn compose(
         side_slots: Vec::new(),
         // No tick walk ran, so nothing is covered and the chart keeps every bar.
         covered: Coverage::none(),
+        mark,
+        avg_price: request.avg_price,
     }
 }
 
@@ -114,6 +124,8 @@ pub(super) fn compose(
 ///     cache: The ring.
 ///     key: The question being asked.
 ///     identity: Discriminator the caller expects on the series it gets back.
+///     avg_price: FORK (#67): the asking request's own entry level, stamped over whatever the
+///         storing request carried.
 ///
 /// Returns:
 ///     A ready series, or `None`.
@@ -121,6 +133,7 @@ pub(super) fn remember_lookup(
     cache: &Mutex<VecDeque<(OutcomeKey, Remembered)>>,
     key: &OutcomeKey,
     identity: u64,
+    avg_price: Option<f32>,
 ) -> Option<Remembered> {
     let cache = cache
         .lock()
@@ -133,8 +146,12 @@ pub(super) fn remember_lookup(
         } => {
             // The identity belongs to the WINDOW that asked, not to the cached rows: two windows
             // on the same trade must not share a chart revision, or the second would be told
-            // nothing changed and would draw nothing.
+            // nothing changed and would draw nothing. The entry level is request data on exactly
+            // the same terms — two trades CAN share one market and one second-resolution window
+            // (two strategies filled in the same second), and the second must not draw the
+            // first's average.
             series.identity = identity;
+            series.avg_price = avg_price;
             Remembered::Ready {
                 series,
                 ticks_settled,

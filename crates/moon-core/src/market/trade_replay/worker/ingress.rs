@@ -373,7 +373,7 @@ pub(super) fn run_lane(rx: &Receiver<LaneJob>, shared: &Shared) {
                     }
                     Err(Some(status)) => {
                         let mut series = stage.baseline.clone().unwrap_or_else(|| {
-                            compose(&request, request.address.venue, stage.candles)
+                            compose(&request, request.address.venue, stage.candles, stage.mark)
                         });
                         series.tick_status = if series.source.is_ticks() {
                             TickStatus::Served

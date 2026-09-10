@@ -147,6 +147,7 @@ pub(super) fn serve_ticks_with(
                 partial,
                 covered,
                 stage.candles.clone(),
+                stage.mark.clone(),
             ),
             // Not settled: a later capture (the settle pass, a neighbouring trade) may widen
             // what the tiles hold, and a reopen should see it.
@@ -348,6 +349,7 @@ pub(super) fn serve_ticks_with(
                 true,
                 run.clone(),
                 stage.candles.clone(),
+                stage.mark.clone(),
             );
             series.tick_status = TickStatus::Streaming;
             if request
@@ -551,6 +553,7 @@ pub(super) fn serve_ticks_with(
         partial,
         covered,
         stage.candles.clone(),
+        stage.mark.clone(),
     );
     if host_limited {
         series.tick_status = TickStatus::RateLimited {
