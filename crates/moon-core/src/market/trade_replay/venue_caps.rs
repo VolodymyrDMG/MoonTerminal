@@ -378,6 +378,103 @@ impl TradeRoute {
     }
 }
 
+/// Route serving one-minute MARK-PRICE bars over a bounded past window.
+///
+/// The deal window draws a mark-price line beside the traded ticks, and the mark price is not
+/// derivable from trades — it is the venue's own funding-reference index, published only by the
+/// venue itself. Coverage is deliberately Binance-only for now: both routes were read off the
+/// vendor's documented `markPriceKlines` endpoints, which answer in the SAME positional row shape
+/// as [`KlineRoute::BinanceUsdM`]'s klines (the volume cells hold `"0"`), so
+/// [`super::rest::binance`]'s one parser serves both. Every other brand answers [`None`] from
+/// [`mark_route`] — the same honest degradation [`trade_route`] gives Bybit: the line is simply
+/// absent, never guessed. Spot venues are not a coverage gap at all: a spot market HAS no mark
+/// price.
+///
+/// | route | endpoint | gate key | rows | doc |
+/// |---|---|---|---|---|
+/// | `BinanceUsdMMark` | `/fapi/v1/markPriceKlines` | `fapi.binance.com` | 1500 | developers.binance.com/docs/derivatives/usds-margined-futures/market-data/rest-api/Mark-Price-Kline-Candlestick-Data |
+/// | `BinanceCoinMMark` | `/dapi/v1/markPriceKlines` | `dapi.binance.com` | 1500 | developers.binance.com/docs/derivatives/coin-margined-futures/market-data/rest-api/Mark-Price-Kline-Candlestick-Data |
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MarkRoute {
+    /// `GET https://fapi.binance.com/fapi/v1/markPriceKlines` — USD-M futures.
+    BinanceUsdMMark,
+    /// `GET https://dapi.binance.com/dapi/v1/markPriceKlines` — COIN-M futures.
+    BinanceCoinMMark,
+}
+
+impl MarkRoute {
+    /// Return the fully qualified request URL for this route.
+    ///
+    /// Returns:
+    ///     Absolute HTTPS endpoint, without any query string.
+    pub const fn url(self) -> &'static str {
+        match self {
+            Self::BinanceUsdMMark => "https://fapi.binance.com/fapi/v1/markPriceKlines",
+            Self::BinanceCoinMMark => "https://dapi.binance.com/dapi/v1/markPriceKlines",
+        }
+    }
+
+    /// Rate-limit key, DERIVED from the sibling [`KlineRoute`]'s host exactly as
+    /// [`TradeRoute::host`] derives its own — one real IP budget must never be split into two
+    /// independently spendable permits by a re-typed string.
+    ///
+    /// Returns:
+    ///     Bare host name, without scheme or path.
+    pub const fn host(self) -> &'static str {
+        match self {
+            Self::BinanceUsdMMark => KlineRoute::BinanceUsdM.host(),
+            Self::BinanceCoinMMark => KlineRoute::BinanceCoinM.host(),
+        }
+    }
+
+    /// Largest number of rows one request may ask for — the documented `limit` cap, the same
+    /// 1500 both futures kline endpoints already state for their trade klines.
+    ///
+    /// Returns:
+    ///     Maximum rows per request.
+    pub const fn max_rows(self) -> usize {
+        match self {
+            Self::BinanceUsdMMark | Self::BinanceCoinMMark => 1_500,
+        }
+    }
+}
+
+/// Return the mark-price-kline route this venue is served by, if this build knows one.
+///
+/// EVERY arm spelled out; no `_` catch-all, same discipline as [`kline_route`]. [`None`] for every
+/// spot venue because a spot market has no mark price to fetch, and for every non-Binance futures
+/// venue because only Binance's endpoints have been read and verified — see [`MarkRoute`]'s own
+/// header for why an unverified route must not be guessed.
+///
+/// Args:
+///     venue: Venue resolved from the core's reported platform ordinal.
+///
+/// Returns:
+///     The route, or `None` when no verified public mark-price endpoint exists for it.
+pub const fn mark_route(venue: Venue) -> Option<MarkRoute> {
+    match (venue.brand, venue.kind) {
+        (Brand::Binance, MarketKind::Futures) => Some(MarkRoute::BinanceUsdMMark),
+        (Brand::Binance, MarketKind::Quarterly) => Some(MarkRoute::BinanceCoinMMark),
+        // A spot market has no mark price at all — this is a fact about the product, not a
+        // coverage gap.
+        (Brand::Binance, MarketKind::Spot)
+        | (Brand::Bybit, MarketKind::Spot)
+        | (Brand::Gate, MarketKind::Spot)
+        | (Brand::BitGet, MarketKind::Spot)
+        | (Brand::Okx, MarketKind::Spot)
+        | (Brand::Hyperliquid, MarketKind::Spot)
+        | (Brand::Htx, MarketKind::Spot) => None,
+        // These venues publish mark-price candles too, but their endpoints have not been read and
+        // verified for this build yet; the line degrades to absent rather than to a guess.
+        (Brand::Bybit, MarketKind::Futures | MarketKind::Quarterly)
+        | (Brand::Gate, MarketKind::Futures | MarketKind::Quarterly)
+        | (Brand::BitGet, MarketKind::Futures | MarketKind::Quarterly)
+        | (Brand::Okx, MarketKind::Futures | MarketKind::Quarterly)
+        | (Brand::Hyperliquid, MarketKind::Futures | MarketKind::Quarterly)
+        | (Brand::Htx, MarketKind::Futures | MarketKind::Quarterly) => None,
+    }
+}
+
 /// Return the public-trade route this venue is served by, if this build knows one.
 ///
 /// EVERY arm spelled out; no `_` catch-all, same discipline as [`kline_route`].

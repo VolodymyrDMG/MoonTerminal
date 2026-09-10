@@ -38,8 +38,8 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-use super::venue_caps::{KlineRoute, TradeRoute};
-use crate::feed::types::Tick;
+use super::venue_caps::{KlineRoute, MarkRoute, TradeRoute};
+use crate::feed::types::{PricePoint, Tick};
 use crate::market::candles::ChartCandle;
 
 /// Bounded lifetime of one HTTP request.
@@ -148,6 +148,54 @@ pub fn fetch_klines(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     Ok(rows)
+}
+
+/// Fetch one page of one-minute MARK-PRICE bars and flatten them into line points.
+///
+/// Every [`MarkRoute`] is a Binance `markPriceKlines` endpoint speaking the exact kline grammar,
+/// so this reuses [`binance::fetch_url`] and [`binance::parse_klines`] rather than growing a
+/// second Binance request builder — the row's volume cells hold `"0"` there and parse as zero,
+/// which nothing here consumes.
+///
+/// Each bar becomes ONE point at `(t_open_ms, open)`: the mark price AS OF the bar's own open
+/// instant, a settled fact even for the minute currently forming, which is why no forming-bar
+/// drop is needed — nothing from this call is ever merged into the shared kline cache.
+///
+/// Args:
+///     agent: Shared client.
+///     route: Which mark endpoint to ask.
+///     market: Exchange-native market name, as the core reports it.
+///     from_ms: First millisecond of the page, inclusive.
+///     to_ms: Last millisecond of the page, inclusive.
+///
+/// Returns:
+///     Line points in ascending time, or a classified failure.
+pub fn fetch_mark_points(
+    agent: &ureq::Agent,
+    route: MarkRoute,
+    market: &str,
+    from_ms: i64,
+    to_ms: i64,
+) -> Result<Vec<PricePoint>, FetchError> {
+    let value = binance::fetch_url(agent, route.url(), market, from_ms, to_ms, route.max_rows())?;
+    let mut rows = binance::parse_klines(
+        &value,
+        binance::QuoteSource::Cell(binance::QUOTE_VOLUME_CELL),
+    )?;
+    // Same unconditional ascending sort `fetch_klines` applies, for the same reason: the line
+    // strip drawn from these points connects them in ARRAY order.
+    rows.sort_by(|a, b| {
+        a.t_open_ms
+            .partial_cmp(&b.t_open_ms)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Ok(rows
+        .iter()
+        .map(|c| PricePoint {
+            time_ms: c.t_open_ms,
+            price: c.open,
+        })
+        .collect())
 }
 
 /// Continuation token for one public-trade page.

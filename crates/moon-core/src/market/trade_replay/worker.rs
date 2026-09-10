@@ -37,12 +37,12 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use super::gate::ReplayGate;
-use super::venue_caps::{TradeRoute, bybit_category, kline_route, trade_route};
+use super::venue_caps::{TradeRoute, bybit_category, kline_route, mark_route, trade_route};
 use super::{
     ReplayWindow, TickPlan, TickStatus, TradeReplayEmpty, TradeReplayFailure, TradeReplayOutcome,
     TradeReplaySeries, TradeReplaySource, fit_ticks, pages, rest, tick_plan,
 };
-use crate::feed::types::Tick;
+use crate::feed::types::{PricePoint, Tick};
 use crate::market::candles::ChartCandle;
 use crate::market::kline_cache::{KlineCache, MergeItem};
 use crate::market::source::ReplayAddress;
@@ -158,6 +158,10 @@ pub(crate) struct TickStage {
     key: OutcomeKey,
     /// The exchange klines to carry forward as the bar layer of the eventual tick series.
     candles: Vec<ChartCandle>,
+    /// The mark-price track to carry forward, on the same terms as [`Self::candles`]: fetched by
+    /// the candle stage that ran first, and carried here so the tick outcome keeps the line
+    /// whatever the outcome ring evicted in between.
+    mark: Vec<PricePoint>,
 }
 
 /// One unit of the worker's internal priority queue.
@@ -280,6 +284,13 @@ pub struct TradeReplayRequest {
     pub window: ReplayWindow,
     /// Stable discriminator for the series this produces, so two open windows never collide.
     pub identity: u64,
+    /// The replayed position's own average entry price, drawn as a level line, or `None` when
+    /// the requester has none worth drawing.
+    ///
+    /// Request data on the same terms as `identity`: it belongs to the WINDOW that asked, never
+    /// to the fetched rows, and every path that answers from a cache re-stamps it from the live
+    /// request — see [`TradeReplaySeries::avg_price`].
+    pub avg_price: Option<f32>,
     /// Set by the requester when its window closes; checked between pages.
     pub cancel: Arc<AtomicBool>,
     /// Where the answer goes. A dead receiver is normal and is not an error.
@@ -395,7 +406,8 @@ fn run(rx: &Receiver<TradeReplayRequest>) {
                         let _ = request.reply.send(TradeReplayOutcome::Ready(series));
                     }
                     Err(Some(status)) => {
-                        let mut series = compose(&request, request.address.venue, stage.candles);
+                        let mut series =
+                            compose(&request, request.address.venue, stage.candles, stage.mark);
                         series.tick_status = status;
                         // `NoTrades` is authoritative — the venue answered and held nothing — and
                         // is remembered settled exactly like a `Ready` harvest. `Failed` is not:
@@ -467,7 +479,7 @@ fn serve(
         from_ms: request.window.from_ms,
         to_ms: request.window.to_ms,
     };
-    match remember_lookup(cache, &key, request.identity) {
+    match remember_lookup(cache, &key, request.identity, request.avg_price) {
         Some(Remembered::Ready {
             series,
             ticks_settled: true,
@@ -500,7 +512,12 @@ fn serve(
 
     // The SQLite cache is read first and unconditionally: it costs no request and is not gated.
     if let Some(rows) = read_cached_bars(request.address.cache.as_ref(), request) {
-        let mut series = compose(request, venue, rows);
+        // The BARS still cost no request and are never gated — that property is what this branch
+        // exists for. The mark line rides best-effort on top: `fetch_mark_track` asks the gate
+        // itself and answers empty when refused, so a user in backoff still gets the cached chart
+        // instantly, just without the line until a later open.
+        let mark = fetch_mark_track(agent, gate, request, Instant::now() + JOB_DEADLINE);
+        let mut series = compose(request, venue, rows, mark);
         let tick_stage = stage_and_stamp(venue, request.window, &key, &mut series);
         // Settled exactly when NO stage was queued: `stage_and_stamp` already stamped a TERMINAL
         // status (`NoRoute`/`OutOfRetention`) in that case, and both are stable facts a reopen
@@ -631,7 +648,14 @@ fn serve(
             tick_stage: None,
         };
     }
-    let mut series = compose(request, venue, rows);
+    // The mark line is fetched AFTER the venue's own answer above proved it alive, and only for a
+    // window that still has a viewer: a cancelled run keeps its paid-for bars for the cache merge
+    // but spends nothing more.
+    let mark = match cancelled {
+        true => Vec::new(),
+        false => fetch_mark_track(agent, gate, request, deadline),
+    };
+    let mut series = compose(request, venue, rows, mark);
     // Only a COMPLETE run may be remembered. Pages are issued left to right, so a cancelled run
     // holds the window's left-hand prefix — typically missing exactly the bars around the exit —
     // and the in-memory ring, unlike the SQLite path, has no coverage re-check to catch that on
@@ -696,13 +720,77 @@ fn stage_and_stamp(
     key: &OutcomeKey,
     series: &mut TradeReplaySeries,
 ) -> Option<TickStage> {
-    match tick_stage_for(venue, window, key, &series.candles) {
+    match tick_stage_for(venue, window, key, &series.candles, &series.mark) {
         Ok(stage) => Some(stage),
         Err(status) => {
             series.tick_status = status;
             None
         }
     }
+}
+
+/// Best-effort fetch of the venue's mark-price track across one request's window.
+///
+/// BEST EFFORT is the whole contract, and every arm below serves it: the mark line is context
+/// beside a picture that already exists, so nothing here may fail the replay or delay it past the
+/// job's own deadline. A refused permit, a transient failure, an expired deadline or a cancelled
+/// window each stop the walk and serve whatever was collected so far — possibly nothing — and the
+/// line is simply shorter or absent, never a Failed outcome.
+///
+/// Gate discipline mirrors the candle stage's own: ONE claim before the first request (the candle
+/// loop's claim is already CLEARED by the time this runs, and a cache-served branch never claimed
+/// at all, so trusting it would send blind into an active refusal), `pace` per page, and `clear`
+/// after every stop that is OUR OWN doing — only a refusal the venue itself just gave
+/// (`Transient`) leaves the claim standing, exactly as `paginate_ticks`'s table reasons.
+///
+/// Args:
+///     agent: Shared HTTP client.
+///     gate: Per-host pacing and backoff.
+///     request: The request whose window the track should cover.
+///     deadline: The owning job's own deadline; crossing it stops the walk.
+///
+/// Returns:
+///     Line points ascending in time, covering as much of the window as the walk reached; empty
+///     when the venue has no mark route or nothing could be fetched.
+fn fetch_mark_track(
+    agent: &ureq::Agent,
+    gate: &ReplayGate,
+    request: &TradeReplayRequest,
+    deadline: Instant,
+) -> Vec<PricePoint> {
+    let Some(route) = mark_route(request.address.venue) else {
+        return Vec::new();
+    };
+    if gate.claim(route.host(), Instant::now()).is_err() {
+        return Vec::new();
+    }
+    let mut out: Vec<PricePoint> = Vec::new();
+    let mut venue_refused = false;
+    for (from_ms, to_ms) in pages(request.window, BAR_MS, route.max_rows()) {
+        if request.cancel.load(Ordering::Relaxed) || Instant::now() >= deadline {
+            break;
+        }
+        gate.pace(route.host());
+        match rest::fetch_mark_points(agent, route, &request.market, from_ms, to_ms) {
+            Ok(points) => out.extend(points),
+            // The venue ANSWERED; a symbol it does not list will not appear on a later page
+            // either. Unreachable in practice — the kline fetch for the same symbol on the same
+            // host already succeeded — but the classifier can say it, so it is handled.
+            Err(rest::FetchError::UnknownSymbol) => break,
+            Err(rest::FetchError::Transient(diagnostic)) => {
+                log::warn!(
+                    "[x] trade-replay mark fetch stopped on {}: {diagnostic}",
+                    route.host()
+                );
+                venue_refused = true;
+                break;
+            }
+        }
+    }
+    if !venue_refused {
+        gate.clear(route.host());
+    }
+    out
 }
 
 /// Decide whether a just-built CANDLE series earns a queued tick upgrade, or the reason it does
@@ -722,6 +810,8 @@ fn stage_and_stamp(
 ///     key: The ring key this stage would replace on success.
 ///     candles: The exchange klines just composed, carried forward as the eventual tick series'
 ///         bar layer — see [`TickStage::candles`].
+///     mark: The mark-price track just composed, carried forward on the same terms — see
+///         [`TickStage::mark`].
 ///
 /// Returns:
 ///     The stage to queue, or the reason it is not queued.
@@ -730,6 +820,7 @@ fn tick_stage_for(
     window: ReplayWindow,
     key: &OutcomeKey,
     candles: &[ChartCandle],
+    mark: &[PricePoint],
 ) -> Result<TickStage, TickStatus> {
     let route = trade_route(venue).ok_or(TickStatus::NoRoute)?;
     let now_ms = crate::util::time::now_unix_ms_i64();
@@ -744,6 +835,7 @@ fn tick_stage_for(
         route,
         key: key.clone(),
         candles: candles.to_vec(),
+        mark: mark.to_vec(),
     })
 }
 
@@ -921,6 +1013,7 @@ fn serve_ticks(
             partial,
             covered,
             stage.candles.clone(),
+            stage.mark.clone(),
         ),
         venue_refused,
     ))
@@ -1153,6 +1246,7 @@ where
 ///         withholds the bars lying inside it, and only this range knows that a covered minute
 ///         with no trade in it is still covered.
 ///     candles: The exchange klines to carry as the bar layer.
+///     mark: The mark-price track to carry, fetched by the candle stage — see [`TickStage::mark`].
 ///
 /// Returns:
 ///     The series to hand the chart.
@@ -1164,6 +1258,7 @@ fn compose_ticks(
     partial: bool,
     covered: (i64, i64),
     candles: Vec<ChartCandle>,
+    mark: Vec<PricePoint>,
 ) -> TradeReplaySeries {
     TradeReplaySeries {
         source: TradeReplaySource::Ticks,
@@ -1177,6 +1272,8 @@ fn compose_ticks(
         bucket_ms,
         partial,
         covered: Some(covered),
+        mark,
+        avg_price: request.avg_price,
     }
 }
 
@@ -1210,6 +1307,7 @@ pub(crate) fn rows_for_cache(source: TradeReplaySource, rows: &[ChartCandle]) ->
 ///     request: The request being served.
 ///     venue: Venue the rows came from.
 ///     rows: Bars in ascending open time.
+///     mark: The venue's mark-price track over the window, or empty where there is none.
 ///
 /// Returns:
 ///     The series to hand the chart.
@@ -1217,6 +1315,7 @@ fn compose(
     request: &TradeReplayRequest,
     venue: crate::venue::Venue,
     rows: Vec<ChartCandle>,
+    mark: Vec<PricePoint>,
 ) -> TradeReplaySeries {
     TradeReplaySeries {
         source: TradeReplaySource::Klines1m,
@@ -1231,6 +1330,8 @@ fn compose(
         partial: false,
         // No tick walk ran, so there is no covered span and the chart keeps every bar.
         covered: None,
+        mark,
+        avg_price: request.avg_price,
     }
 }
 
@@ -1240,6 +1341,8 @@ fn compose(
 ///     cache: The ring.
 ///     key: The question being asked.
 ///     identity: Discriminator the caller expects on the series it gets back.
+///     avg_price: The asking request's own entry level, stamped over whatever the storing request
+///         carried.
 ///
 /// Returns:
 ///     A ready series, or `None`.
@@ -1247,6 +1350,7 @@ fn remember_lookup(
     cache: &Mutex<VecDeque<(OutcomeKey, Remembered)>>,
     key: &OutcomeKey,
     identity: u64,
+    avg_price: Option<f32>,
 ) -> Option<Remembered> {
     let cache = cache
         .lock()
@@ -1259,8 +1363,12 @@ fn remember_lookup(
         } => {
             // The identity belongs to the WINDOW that asked, not to the cached rows: two windows
             // on the same trade must not share a chart revision, or the second would be told
-            // nothing changed and would draw nothing.
+            // nothing changed and would draw nothing. The entry level is request data on exactly
+            // the same terms — two trades CAN share one market and one second-resolution window
+            // (two strategies filled in the same second), and the second must not draw the
+            // first's average.
             series.identity = identity;
+            series.avg_price = avg_price;
             Remembered::Ready {
                 series,
                 ticks_settled,

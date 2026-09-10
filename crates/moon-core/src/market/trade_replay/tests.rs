@@ -37,6 +37,8 @@ fn bars_only_series() -> TradeReplaySeries {
         bucket_ms: 0,
         partial: false,
         covered: None,
+        mark: Vec::new(),
+        avg_price: None,
     }
 }
 
@@ -206,6 +208,116 @@ fn replay_bars_only_series_keeps_every_candle_without_tick_coverage() {
             .collect::<Vec<_>>(),
         vec![0, MINUTE_MS, 2 * MINUTE_MS],
         "a bars-only fallback must keep every one-minute candle instead of rendering an empty chart"
+    );
+}
+
+/// `market/trade_replay/mod.rs:TradeReplaySeries::read_into` must clip the fetched mark track to
+/// the ASK and re-emit it on every read into the cleared buffer; skipping the clip lets a point
+/// beyond the pane's own window through, and capacity left at zero would let the GPU backends
+/// tail-truncate the whole line to one point.
+#[test]
+fn replay_read_serves_the_mark_track_clipped_with_capacity_to_hold_it() {
+    let mut series = bars_only_series();
+    series.mark = (0..=4)
+        .map(|minute| crate::feed::types::PricePoint {
+            time_ms: (minute * MINUTE_MS) as f64,
+            price: 100.0 + minute as f32,
+        })
+        .collect();
+    let mut out = ChartHistoryBuffers::default();
+
+    // Ask covers only the first three minutes; the two later mark points must stay out.
+    let read = series.read_into(
+        0.0,
+        0.0,
+        (2 * MINUTE_MS) as f32,
+        Some(&candle_params(0)),
+        &mut out,
+    );
+
+    assert_eq!(
+        out.mark_points
+            .iter()
+            .map(|p| p.time_ms as i64)
+            .collect::<Vec<_>>(),
+        vec![0, MINUTE_MS, 2 * MINUTE_MS],
+        "the mark track is clipped to the ask, like every other layer"
+    );
+    assert!(
+        read.price_line_capacity >= out.mark_points.len(),
+        "the declared line capacity must hold every emitted point, or the backends truncate"
+    );
+    assert!(
+        read.price_lines_changed,
+        "a frozen read rewrites the line buffers and must say so"
+    );
+
+    // A second read re-emits the SAME points into the cleared buffer rather than doubling them.
+    series.read_into(
+        0.0,
+        0.0,
+        (2 * MINUTE_MS) as f32,
+        Some(&candle_params(0)),
+        &mut out,
+    );
+    assert_eq!(
+        out.mark_points.len(),
+        3,
+        "re-reads clear before emitting; the track must not accumulate"
+    );
+}
+
+/// `market/trade_replay/mod.rs:TradeReplaySeries::read_into` draws `avg_price` as exactly two
+/// points spanning window ∩ ask through the LAST-price channel; an unusable level or an ask that
+/// misses the window entirely must draw nothing rather than a zero-width or off-window shelf.
+#[test]
+fn replay_read_draws_the_entry_level_across_window_and_ask() {
+    let mut series = bars_only_series();
+    series.avg_price = Some(101.5);
+    let mut out = ChartHistoryBuffers::default();
+
+    // Ask wider than the window on the right: the level ends at the WINDOW's edge, not the ask's.
+    series.read_into(
+        0.0,
+        MINUTE_MS as f32,
+        (10 * MINUTE_MS) as f32,
+        Some(&candle_params(0)),
+        &mut out,
+    );
+    assert_eq!(
+        out.last_points
+            .iter()
+            .map(|p| (p.time_ms as i64, p.price))
+            .collect::<Vec<_>>(),
+        vec![(MINUTE_MS, 101.5), (2 * MINUTE_MS, 101.5)],
+        "the level spans window ∩ ask at the request's own average price"
+    );
+
+    // An ask entirely past the window leaves no span to draw.
+    series.read_into(
+        0.0,
+        (3 * MINUTE_MS) as f32,
+        (10 * MINUTE_MS) as f32,
+        Some(&candle_params(0)),
+        &mut out,
+    );
+    assert!(
+        out.last_points.is_empty(),
+        "no window ∩ ask overlap must mean no shelf, not an inverted one"
+    );
+
+    // A non-positive level is refused at the source and draws nothing.
+    series.avg_price = Some(0.0);
+    series.read_into(
+        0.0,
+        0.0,
+        (2 * MINUTE_MS) as f32,
+        Some(&candle_params(0)),
+        &mut out,
+    );
+    assert!(
+        out.last_points.is_empty(),
+        "a zero entry price is 'no line', never a line at zero"
     );
 }
 

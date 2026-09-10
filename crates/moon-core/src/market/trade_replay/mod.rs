@@ -747,6 +747,26 @@ pub struct TradeReplaySeries {
     /// [`Self::partial`] is the BOOLEAN read of this same span against [`Self::window`]; this is
     /// the span itself.
     pub covered: Option<(i64, i64)>,
+    /// The venue's own MARK-PRICE track over [`Self::window`], one point per minute, ascending.
+    ///
+    /// Empty wherever `venue_caps::mark_route` knows no endpoint for the venue (every spot market
+    /// — the product has no mark price — and every non-Binance futures venue for now), and on a
+    /// best-effort fetch that failed: the line is simply absent, never invented. [`Self::read_into`]
+    /// serves these through the chart's EXISTING mark-price channel (`out.mark_points`), so the
+    /// pane's own "Линия Mark Price" toggle governs it exactly as on a live chart.
+    pub mark: Vec<crate::feed::types::PricePoint>,
+    /// The replayed position's own average entry price, or `None` when the requester supplied
+    /// none (or an unusable one).
+    ///
+    /// REQUEST data, not market data: it arrives on `worker::TradeReplayRequest`, never from a
+    /// venue, and a memory-ring reopen re-stamps it from the reopening request exactly as
+    /// `identity` is re-stamped — two trades that happen to share one market and window must not
+    /// inherit each other's entry level. [`Self::read_into`] draws it as a horizontal level across
+    /// the window through the chart's EXISTING last-price channel (`out.last_points`): a frozen
+    /// replay has no live "last price" line of its own, and the position's average is exactly the
+    /// level a reader of this window wants pinned — so the semantic reuse is deliberate and
+    /// documented here rather than hidden.
+    pub avg_price: Option<f32>,
 }
 
 impl TradeReplaySeries {
@@ -853,6 +873,43 @@ impl TradeReplaySeries {
         read.combo_reset = true;
         read.tick_price_range = price_range_of_ticks(&out.ticks);
         read.last_price = out.ticks.last().map(|t| t.price);
+
+        // The two price lines, re-emitted whole on every read exactly like the points above.
+        // MARK is the venue's own fetched track, clipped to the ask; AVG is the position's entry
+        // level, drawn edge to edge across window ∩ ask — a level line, so two points suffice.
+        out.mark_points.extend(
+            self.mark
+                .iter()
+                .filter(|p| {
+                    p.time_ms.is_finite()
+                        && p.price.is_finite()
+                        && p.price > 0.0
+                        && (p.time_ms as i64) >= from_ms
+                        && (p.time_ms as i64) <= to_ms
+                })
+                .copied(),
+        );
+        if let Some(avg) = self.avg_price {
+            let left = self.window.from_ms.max(from_ms);
+            let right = self.window.to_ms.min(to_ms);
+            if avg.is_finite() && avg > 0.0 && left < right {
+                out.last_points.push(crate::feed::types::PricePoint {
+                    time_ms: left as f64,
+                    price: avg,
+                });
+                out.last_points.push(crate::feed::types::PricePoint {
+                    time_ms: right as f64,
+                    price: avg,
+                });
+            }
+        }
+        // Sized to what was ACTUALLY emitted, never left at zero: the GPU backends floor a zero
+        // capacity to ONE point and tail-truncate each line buffer to it, which would silently
+        // collapse either line to a dot. `price_lines_changed` is stated too — `combo_reset`
+        // already forces the caller's upload branch, but the buffers WERE rewritten and saying so
+        // costs nothing if that gating ever narrows.
+        read.price_line_capacity = out.last_points.len().max(out.mark_points.len()).max(1);
+        read.price_lines_changed = true;
 
         // Bars, only when the caller both wants them and does not already hold this exact series.
         if let Some(params) = candle_params {
