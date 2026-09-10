@@ -817,6 +817,11 @@ impl TradeWindowView {
             identity: self.identity,
             tick_value,
             ticks: self.load_ticks,
+            // FORK (#67): the record's entry price IS the position's average fill price — the
+            // report stores entries normalized, shorts included — drawn by the replay as a level
+            // line across the window. Filtered here rather than downstream so a zero from a
+            // legacy row means "no line" instead of a line at zero.
+            avg_price: Some(self.record.buy_price as f32).filter(|p| p.is_finite() && *p > 0.0),
             cancel: self.cancel.clone(),
             reply: tx,
         });

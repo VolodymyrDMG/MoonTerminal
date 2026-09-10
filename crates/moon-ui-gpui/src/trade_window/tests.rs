@@ -35,6 +35,8 @@ fn progressive_trade_ticks_preserve_view_and_accept_core_completion() {
         partial: true,
         side_slots: Vec::new(),
         covered: moon_core::market::trade_replay::Coverage::one((99_700_000, 100_000_000)),
+        mark: Vec::new(),
+        avg_price: None,
     };
     let next = fold_outcome(&state, true, &TradeReplayOutcome::Ready(series.clone()));
     assert!(next.accept);

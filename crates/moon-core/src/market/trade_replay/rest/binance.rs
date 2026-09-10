@@ -56,8 +56,37 @@ pub(super) fn fetch(
     to_ms: i64,
     max_rows: usize,
 ) -> Result<Value, FetchError> {
+    fetch_url(agent, route.url(), market, from_ms, to_ms, max_rows)
+}
+
+/// Fetch one kline-shaped page from an explicit Binance endpoint URL.
+///
+/// The one grammar this module exists for, keyed on the URL rather than on [`KlineRoute`] so the
+/// mark-price endpoints ([`crate::market::trade_replay::venue_caps::MarkRoute`]) can speak it too:
+/// `markPriceKlines` takes the SAME query parameters and answers in the SAME positional row shape
+/// as `klines`, differing only in the path. A second hand-rolled request builder for it would be
+/// the drift-prone copy this module's header warns about.
+///
+/// Args:
+///     agent: Shared client.
+///     url: Absolute endpoint URL, from a route's own `url()`.
+///     market: Exchange-native market name.
+///     from_ms: First millisecond of the page, inclusive.
+///     to_ms: Last millisecond of the page, inclusive.
+///     max_rows: Row cap for this request.
+///
+/// Returns:
+///     The decoded response, or a classified failure.
+pub(super) fn fetch_url(
+    agent: &ureq::Agent,
+    url: &str,
+    market: &str,
+    from_ms: i64,
+    to_ms: i64,
+    max_rows: usize,
+) -> Result<Value, FetchError> {
     let response = agent
-        .get(route.url())
+        .get(url)
         .query("symbol", market)
         .query("interval", "1m")
         .query("startTime", from_ms.to_string())

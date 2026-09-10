@@ -143,7 +143,7 @@ fn cached_retry_keeps_wider_tick_coverage() {
             ticks_settled: false,
         },
     );
-    let Some(Remembered::Ready { mut series, .. }) = remember_lookup(&cache, &key, 42) else {
+    let Some(Remembered::Ready { mut series, .. }) = remember_lookup(&cache, &key, 42, None) else {
         panic!("retry cache missing")
     };
     let stage =
@@ -169,7 +169,7 @@ fn cached_retry_keeps_wider_tick_coverage() {
     );
     let Some(Remembered::Ready {
         series: reopened, ..
-    }) = remember_lookup(&cache, &key, 43)
+    }) = remember_lookup(&cache, &key, 43, None)
     else {
         panic!("settled cache missing")
     };
@@ -198,6 +198,8 @@ fn core_series(partial: bool) -> TradeReplaySeries {
         side_slots: Vec::new(),
         bucket_ms: 0,
         partial,
+        mark: Vec::new(),
+        avg_price: None,
         covered: Coverage::one(if partial {
             (60_000, 120_000)
         } else {
@@ -271,6 +273,7 @@ fn core_replay_rechecks_after_candles_and_keeps_context() {
             margin_ms: bars.window.margin_ms,
         },
         candles: bars.candles.clone(),
+        mark: Vec::new(),
     };
     let served = core_first(
         || {
@@ -654,6 +657,7 @@ fn tile_request(reply: Sender<TradeReplayOutcome>) -> TradeReplayRequest {
         identity: 7,
         tick_value: super::super::venue_caps::TickValue::Base,
         ticks: true,
+        avg_price: None,
         cancel: Arc::new(AtomicBool::new(false)),
         reply,
     }
@@ -673,6 +677,7 @@ fn tile_stage(request: &TradeReplayRequest) -> TickStage {
             margin_ms: request.window.margin_ms,
         },
         candles: Vec::new(),
+        mark: Vec::new(),
     }
 }
 
