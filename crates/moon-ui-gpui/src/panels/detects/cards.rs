@@ -13,8 +13,8 @@ use moon_ui::{MoonBadge, MoonBadgeVariant, MoonPalette, MoonText, h_flex, rgba_f
 use rust_i18n::t;
 
 use moon_core::config::{
-    detect_slot_count, BadgesConfig, DetectChart, DetectField, DetectSizeCfg, DetectSlot,
-    DetectViewCfg, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI,
+    BadgesConfig, DETECT_SIZE_LARGE, DETECT_SIZE_MEDIUM, DETECT_SIZE_MINI, DetectChart,
+    DetectField, DetectSizeCfg, DetectSlot, DetectViewCfg, detect_slot_count,
 };
 
 use super::DetectItem;
@@ -511,10 +511,7 @@ fn chip(
         // over-chart backing below covers it.
         DetectField::VolWin => {
             let (label, col) = match window_volume(&it.ticks, view.ticks_window_ms()) {
-                Some(v) => (
-                    format_quote_short(v),
-                    p.text_soft,
-                ),
+                Some(v) => (format_quote_short(v), p.text_soft),
                 None => ("—".to_string(), p.text_muted),
             };
             MoonText::new(label)
@@ -625,7 +622,7 @@ fn chart_el(
         // ticks were unavailable.
         DetectChart::Ticks => {
             ticks_canvas(&it.ticks, theme, win_ms).or_else(|| candle_canvas(&it.bars, theme))
-    }
+        }
     }
 }
 
@@ -677,7 +674,6 @@ fn format_quote_short(value: f32) -> String {
         format!("{value:.0} $")
     }
 }
-
 
 /// Total quote turnover (buys plus sells) over the configured tick window; `None` when the window
 /// holds no trades — an absent snapshot must read as "no data", not as a confident zero. Feeds

@@ -101,7 +101,9 @@ impl Backend {
             // leave a phase behind for a reused uid to trip over.
             watch.phase = seen;
         }
-        if fired && enabled {
+        // Quiet mode silences this like every other producer; the watch above still advanced,
+        // so waking up does not replay the fills that happened while asleep.
+        if fired && enabled && !self.quiet_sleeping {
             crate::media::sound::play(&sound);
         }
     }
