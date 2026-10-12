@@ -126,6 +126,7 @@ use moon_chart::view::ChartView;
 use moon_core::config::ChartTheme;
 
 /// A few round trips, far enough apart to draw as separate arrows.
+#[cfg(windows)]
 fn hover_marks() -> Vec<moon_chart::trade_marks::TradeMark> {
     (0..6)
         .map(|i| moon_chart::trade_marks::TradeMark {
@@ -141,6 +142,7 @@ fn hover_marks() -> Vec<moon_chart::trade_marks::TradeMark> {
         .collect()
 }
 
+#[cfg(windows)]
 fn hover_ctx(hovered: Option<(usize, bool)>) -> moon_chart::trade_marks::TradeGeometryCtx {
     moon_chart::trade_marks::TradeGeometryCtx {
         epoch_ms: 900_000.0,

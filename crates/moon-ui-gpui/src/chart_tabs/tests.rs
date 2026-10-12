@@ -256,7 +256,7 @@ fn detect_auto_activation_is_gated_on_the_setting_and_skips_detached_windows() {
     let source = include_str!("ingest.rs");
 
     assert!(source.contains("let auto_activate = b.config.charts_auto_activate;"));
-    assert!(source.contains("if auto_activate {"));
+    assert!(source.contains("if auto_activate && let Some((n, bucket)) = last_strip_target {"));
     assert!(source.contains("let tab = Tab::Add(n, bucket);"));
     // Only strip tabs are recorded as activation targets; the detached branch records nothing.
     assert!(source.contains("last_strip_target = Some((n, bucket.clone()));"));

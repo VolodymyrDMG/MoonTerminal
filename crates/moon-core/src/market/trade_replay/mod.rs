@@ -270,6 +270,10 @@ pub enum TradeReplayFailure {
 }
 
 /// The complete answer to one replay request.
+// FORK (#67): the series grew a mark track and an entry level, which tips `Ready` past clippy's
+// variant-size threshold. One outcome travels once per request over a channel and is cloned by
+// the ring at most once, so boxing it would buy nothing but a dereference on every reader.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug)]
 pub enum TradeReplayOutcome {
     /// Rows to draw.

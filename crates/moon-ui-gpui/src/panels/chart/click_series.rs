@@ -92,6 +92,9 @@ fn same_spot(a: (f32, f32), b: (f32, f32)) -> bool {
 #[derive(Clone, Copy)]
 struct Seen {
     button: MouseButton,
+    /// FORK: recorded but no longer compared — the pair check deliberately ignores the platform's
+    /// own count (see `continues_into`); kept so a revert of that rule stays one hunk.
+    #[allow(dead_code)]
     native: usize,
     own: usize,
     at_ms: f64,
@@ -175,12 +178,11 @@ impl ClickSeries {
     /// Args:
     ///     pos: Current pointer position in the same screen logical pixels presses use.
     pub(super) fn drag_beyond(&mut self, pos: (f32, f32), threshold_px: f32) {
-        if let Some(last) = self.last {
-            if (pos.0 - last.pos.0).abs() > threshold_px
-                || (pos.1 - last.pos.1).abs() > threshold_px
-            {
-                self.last = None;
-            }
+        if let Some(last) = self.last
+            && ((pos.0 - last.pos.0).abs() > threshold_px
+                || (pos.1 - last.pos.1).abs() > threshold_px)
+        {
+            self.last = None;
         }
     }
 

@@ -305,14 +305,12 @@ impl ChartTabs {
         // Opt-in auto-activation (`charts_auto_activate`): show the tab of the newest AddToChart
         // detect. Only the visible tab selection changes — the OS window is never raised, so the
         // user is not yanked across Spaces mid-typing.
-        if auto_activate {
-            if let Some((n, bucket)) = last_strip_target {
-                let tab = Tab::Add(n, bucket);
-                if self.active != tab {
-                    self.active = tab;
-                    self.sync_inactive_chart_visibility(cx);
-                    self.sync_active_scale(cx);
-                }
+        if auto_activate && let Some((n, bucket)) = last_strip_target {
+            let tab = Tab::Add(n, bucket);
+            if self.active != tab {
+                self.active = tab;
+                self.sync_inactive_chart_visibility(cx);
+                self.sync_active_scale(cx);
             }
         }
         self.sync_seen_for_active(cx);

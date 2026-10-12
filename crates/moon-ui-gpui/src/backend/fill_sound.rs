@@ -45,12 +45,7 @@ fn phase_class(status: &str) -> u8 {
 /// (3..=5), which happens when the fill and the exit order land inside one drain tick. Sell
 /// fills: a set sell (3) reaching its first partial (4) or done (5), and a partial reaching done.
 fn transition_beeps(prev: u8, next: u8) -> bool {
-    match (prev, next) {
-        (1, 2..=5) => true,
-        (3, 4 | 5) => true,
-        (4, 5) => true,
-        _ => false,
-    }
+    matches!((prev, next), (1, 2..=5) | (3, 4 | 5) | (4, 5))
 }
 
 impl Backend {
